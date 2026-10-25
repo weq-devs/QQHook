@@ -229,6 +229,7 @@ object MainHook {
         hook?.after {
             runCatching {
                 val from = it.args[0]
+                XposedBridge.log("[TXHook-RECV] ★回调触发 args=${it.args.size} cls=${from?.javaClass?.name}")
                 val cmd = from.getField<String>("mCmd")
                 val seq = from.getField<Int>("mSeq")
                 val uin = from.getField<String>("mUin")
