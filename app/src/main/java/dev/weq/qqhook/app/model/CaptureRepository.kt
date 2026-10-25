@@ -51,6 +51,7 @@ object CaptureRepository {
 
     private var attached = false
     private val _nextItemId = AtomicLong(1)
+    private const val POLL_INTERVAL_MS = 300L
     private val _seqCounter = AtomicInteger(0)
 
     fun nextItemId(): Long = _nextItemId.getAndIncrement()
@@ -60,10 +61,58 @@ object CaptureRepository {
     fun attachCatchProvider() {
         if (attached) return
         attached = true
+        // 保留 ContentProvider 通道（未受 MIUI 限制的设备仍可用）
         CatchProvider.catchHandler = object : CatchProvider.Companion.CatchHandler() {
             override fun handlePacket(time: Long, packet: CapturePacket) {
                 addPacket(packet)
             }
+        }
+        startInboxPolling()
+    }
+
+    private var pollThread: Thread? = null
+
+    /**
+     * 轮询文件投递通道。
+     *
+     * hook 运行在 QQ 的 MSF 进程，MIUI 会拦截它唤醒本应用的 ContentProvider，
+     * 所以数据改走「hook 写 QQ 私有目录 → 本应用用 root 读」这条路。
+     */
+    private fun startInboxPolling() {
+        if (pollThread != null) return
+        pollThread = Thread {
+            if (!FileInboxReader.probeRoot()) {
+                android.util.Log.w("CaptureRepository", "无 root，文件通道不可用")
+                return@Thread
+            }
+            while (true) {
+                try {
+                    if (isCatchEnabled && !isBrowsingHistory) {
+                        val drained = FileInboxReader.drain()
+                        if (drained.isNotEmpty()) {
+                            uiHandler.post {
+                                if (isCatchEnabled && !isBrowsingHistory) {
+                                    for (p in drained) {
+                                        p.uid = nextItemId()
+                                        packets.add(p)
+                                    }
+                                    packetGeneration++
+                                }
+                            }
+                        }
+                    }
+                    Thread.sleep(POLL_INTERVAL_MS)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                } catch (t: Throwable) {
+                    android.util.Log.w("CaptureRepository", "轮询异常", t)
+                    runCatching { Thread.sleep(1000) }
+                }
+            }
+        }.apply {
+            name = "qqhook-inbox-poll"
+            isDaemon = true
+            start()
         }
     }
 

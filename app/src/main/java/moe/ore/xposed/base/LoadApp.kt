@@ -25,6 +25,7 @@ import moe.ore.xposed.hook.base.hostVersionName
 import moe.ore.xposed.hook.base.moduleClassLoader
 import moe.ore.xposed.hook.enums.QQTypeEnum
 import moe.ore.xposed.hooks.ListenTXHookUpdate
+import moe.ore.xposed.utils.FileBridge
 import moe.ore.xposed.utils.FuzzySearchClass
 import moe.ore.xposed.utils.XPClassloader
 import moe.ore.xposed.utils.afterHook
@@ -218,6 +219,10 @@ object LoadApp {
     private fun execStartupInit(ctx: Context) {
         val classLoader = ctx.classLoader.also { requireNotNull(it) }
         XPClassloader.hostClassLoader = classLoader
+
+        // 文件投递通道：写宿主自己的 files 目录，App 端用 root 读取
+        runCatching { FileBridge.init(ctx.filesDir) }
+            .onFailure { XposedBridge.log("[TXHook] FileBridge 初始化失败: $it") }
 
         initHooks(
             // list

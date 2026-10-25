@@ -31,13 +31,19 @@ public final class HttpUtil {
     public static ContentResolver contentResolver;
 
     public static void sendTo(Uri uri, ContentValues contentValues, int source) {
-        de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] >>> 进入 sendTo mode="
-            + contentValues.getAsString("mode"));
+        String mode = contentValues.getAsString("mode");
+        contentValues.put("source", source);
+
+        // 主通道：文件投递（绕过 MIUI 对跨进程 ContentProvider 的拦截）
+        if (FileBridge.isReady()) {
+            FileBridge.append(mode, contentValues);
+        }
+
+        // 可选通道：HTTP 推送（配了地址才发）
         try {
             String url = getApiUrl();
-            String mode = contentValues.getAsString("mode");
             if (url != null && !url.isEmpty()) {
-                String name = switch (mode) {
+                String name = switch (mode == null ? "" : mode) {
                     case "send", "receive" -> "packet";
                     default -> mode;
                 };
@@ -57,31 +63,7 @@ public final class HttpUtil {
                 }
                 postTo(url, name, object, source);
             }
-
-            // tryToConnectWS();
-            String state = null;
-            try {
-                state = contentResolver.getType(URI_GET_TXHOOK_STATE);
-            } catch (Throwable t) {
-                de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] getType 异常: " + t);
-            }
-            de.robv.android.xposed.XposedBridge.log(
-                "[TXHook-SEND] mode=" + mode + " url=" + (url == null ? "null" : url)
-                    + " providerState=" + state);
-            if ("running".equals(state)) {
-                contentValues.put("source", source);
-                try {
-                    contentResolver.insert(uri, contentValues);
-                    de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] insert OK mode=" + mode);
-                } catch (Throwable t) {
-                    de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] insert 失败: " + t);
-                }
-                // 如果查询不到状态就不发了
-            }
-        } catch (IllegalArgumentException ignored) {
-            de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] IllegalArgumentException: " + ignored);
-        } catch (Throwable t) {
-            de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] 其他异常: " + t);
+        } catch (Throwable ignored) {
         }
     }
 
