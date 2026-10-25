@@ -2,7 +2,7 @@ package moe.ore.protocol
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
-import moe.ore.txhook.helper.EMPTY_BYTE_ARRAY
+import dev.weq.qqhook.helper.EMPTY_BYTE_ARRAY
 
 class SSOLoginMerge {
     @Serializable

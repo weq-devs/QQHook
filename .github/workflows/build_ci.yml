@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
     paths-ignore:
       - '**.md'
       - '**.txt'
@@ -20,7 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    if: ${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, '[skip ci]') && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && !startsWith(github.event.head_commit.message || '', '[skip ci]')) }}
 
     steps:
       - uses: actions/checkout@v6
@@ -85,7 +86,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: ${{ env.APK_FILE }}
-          name: TXHook-release-${{ github.event.head_commit.id }}-app
+          name: TXHook-apk
 
       - name: Send commit to telegram
         if: success() && github.repository == 'callng/QQHook' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -105,3 +106,30 @@ jobs:
           ESCAPED=`python3 -c 'import json,os,urllib.parse; print(urllib.parse.quote(json.dumps(os.environ["COMMIT_MESSAGE"])))'`
           curl -v "https://api.telegram.org/bot${BOT_TOKEN}/sendMediaGroup?chat_id=${CHANNEL_ID}&media=%5B%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2FapkFile%22%2C%22parse_mode%22%3A%22MarkdownV2%22%2C%22caption%22%3A${ESCAPED}%7D%5D" \
             -F apkFile=@"$APK_FILE"
+
+  release:
+    name: Publish Release
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v5
+        with:
+          name: TXHook-apk
+          path: release
+
+      - name: List artifacts
+        run: ls -la release
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          name: ${{ github.ref_name }}

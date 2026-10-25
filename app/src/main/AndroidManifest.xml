@@ -40,7 +40,7 @@
 
         <provider
             android:name=".app.CatchProvider"
-            android:authorities="moe.ore.txhook.catch"
+            android:authorities="dev.weq.qqhook.catch"
             android:exported="true"
             android:grantUriPermissions="true"
             tools:ignore="ExportedContentProvider" />

@@ -7,7 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Process
 import io.github.kyuubiran.ezxhelper.android.logging.Logger
-import moe.ore.txhook.BuildConfig
+import dev.weq.qqhook.BuildConfig
 import moe.ore.xposed.base.BaseHook
 import moe.ore.xposed.base.MethodHook
 import moe.ore.xposed.hook.base.hostContext

@@ -20,7 +20,7 @@ val kotlinJvmTarget: JvmTarget by rootProject.extra
 val keystorePath: String? = System.getenv("KEYSTORE_PATH")
 
 extensions.configure<ApplicationExtension> {
-    namespace = "moe.ore.txhook"
+    namespace = "dev.weq.qqhook"
     compileSdk = androidCompileSdkVersion
     buildToolsVersion = androidBuildToolsVersion
 

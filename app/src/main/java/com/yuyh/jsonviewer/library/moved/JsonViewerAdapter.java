@@ -20,9 +20,9 @@ import java.util.Objects;
 
 import moe.ore.android.dialog.Dialog;
 import moe.ore.android.util.AndroidUtil;
-import moe.ore.txhook.app.ParserActivity;
-import moe.ore.txhook.app.model.CapturePacket;
-import moe.ore.txhook.helper.HexUtil;
+import dev.weq.qqhook.app.ParserActivity;
+import dev.weq.qqhook.app.model.CapturePacket;
+import dev.weq.qqhook.helper.HexUtil;
 
 /**
  * Created by yuyuhang on 2017/11/29.

@@ -17,8 +17,8 @@ import androidx.appcompat.app.AlertDialog
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
-import moe.ore.txhook.R
-import moe.ore.txhook.app.ui.dp
+import dev.weq.qqhook.R
+import dev.weq.qqhook.app.ui.dp
 
 object Dialog {
     class EditTextAlertBuilder @JvmOverloads constructor(

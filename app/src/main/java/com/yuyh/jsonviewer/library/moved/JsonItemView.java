@@ -13,7 +13,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageView;
 
-import moe.ore.txhook.R;
+import dev.weq.qqhook.R;
 
 /**
  * Created by yuyuhang on 2017/11/29.

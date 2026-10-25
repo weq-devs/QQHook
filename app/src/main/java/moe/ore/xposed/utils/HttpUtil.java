@@ -20,9 +20,9 @@ import java.lang.reflect.InvocationTargetException;
 
 import kotlinx.serialization.ExperimentalSerializationApi;
 import moe.ore.script.Consist;
-import moe.ore.txhook.app.CatchProvider;
-import moe.ore.txhook.helper.HexUtil;
-import moe.ore.txhook.helper.KotlinExtKt;
+import dev.weq.qqhook.app.CatchProvider;
+import dev.weq.qqhook.helper.HexUtil;
+import dev.weq.qqhook.helper.KotlinExtKt;
 
 public final class HttpUtil {
     private static final Uri URI_GET_TXHOOK_STATE = Uri.parse("content://" + CatchProvider.MY_URI + "/" + Consist.GET_TXHOOK_STATE);

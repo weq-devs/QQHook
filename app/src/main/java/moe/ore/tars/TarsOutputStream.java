@@ -53,8 +53,8 @@ import java.util.Map;
 import kotlinx.io.core.BytePacketBuilder;
 import kotlinx.io.core.internal.DangerousInternalIoApi;
 import moe.ore.tars.exc.TarsEncodeException;
-import moe.ore.txhook.helper.BytePacketExtKt;
-import moe.ore.txhook.helper.StringExtKt;
+import dev.weq.qqhook.helper.BytePacketExtKt;
+import dev.weq.qqhook.helper.StringExtKt;
 
 public class TarsOutputStream {
     private final BytePacketBuilder bs = BytePacketExtKt.newBuilder();

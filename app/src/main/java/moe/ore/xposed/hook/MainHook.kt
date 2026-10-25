@@ -13,10 +13,10 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodHook.MethodHookParam
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
-import moe.ore.txhook.app.CatchProvider
-import moe.ore.txhook.helper.EMPTY_BYTE_ARRAY
-import moe.ore.txhook.helper.hex2ByteArray
-import moe.ore.txhook.helper.toHexString
+import dev.weq.qqhook.app.CatchProvider
+import dev.weq.qqhook.helper.EMPTY_BYTE_ARRAY
+import dev.weq.qqhook.helper.hex2ByteArray
+import dev.weq.qqhook.helper.toHexString
 import moe.ore.xposed.hook.base.hostClassLoader
 import moe.ore.xposed.hook.base.hostPackageName
 import moe.ore.xposed.hook.base.hostVersionCode

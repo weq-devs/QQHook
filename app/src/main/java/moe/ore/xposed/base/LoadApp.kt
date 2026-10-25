@@ -8,7 +8,7 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.kyuubiran.ezxhelper.android.logging.Logger
-import moe.ore.txhook.BuildConfig
+import dev.weq.qqhook.BuildConfig
 import moe.ore.xposed.common.ModeleStatus
 import moe.ore.xposed.hook.AntiDetection
 import moe.ore.xposed.hook.MainHook

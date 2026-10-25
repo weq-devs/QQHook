@@ -35,8 +35,8 @@ import java.util.List;
 import java.util.Map;
 
 import moe.ore.tars.exc.TarsDecodeException;
-import moe.ore.txhook.helper.ByteArrayExtKt;
-import moe.ore.txhook.helper.DebugUtil;
+import dev.weq.qqhook.helper.ByteArrayExtKt;
+import dev.weq.qqhook.helper.DebugUtil;
 
 public final class TarsInputStream {
     Charset sServerEncoding = StandardCharsets.UTF_8;
