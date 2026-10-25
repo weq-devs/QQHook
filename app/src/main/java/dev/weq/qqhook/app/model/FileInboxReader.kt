@@ -29,10 +29,12 @@ object FileInboxReader {
         private set
 
     fun probeRoot(): Boolean {
-        rootAvailable = runCatching {
-            execRoot("id").firstOrNull()?.contains("uid=0") == true
-        }.getOrDefault(false)
-        Log.i(TAG, "root 可用=$rootAvailable")
+        val out = runCatching { execRoot("id") }.getOrDefault(emptyList())
+        rootAvailable = out.any { it.contains("uid=0") }
+        Log.i(TAG, "root 可用=$rootAvailable su=$suPath out=${out.take(2)}")
+        // 顺便探测目标路径是否可见
+        val probe = runCatching { execRoot("ls -d $inboxPath") }.getOrDefault(emptyList())
+        Log.i(TAG, "inbox 探测=$probe")
         return rootAvailable
     }
 
