@@ -49,12 +49,17 @@ object LoadApp {
         )
     }
 
+    @Volatile
+    private var startupDone = false
+
     private fun hookEntry(lpparam: XC_LoadPackage.LoadPackageParam) {
         hostPackageName = lpparam.packageName
         hostProcessName = lpparam.processName
         hostClassLoader = lpparam.classLoader
 
         val startup = afterHook(50) { param ->
+            if (startupDone) return@afterHook
+            startupDone = true
             XposedBridge.log("[TXHook-DIAG] startup 回调触发 pid=${android.os.Process.myPid()} proc=$hostProcessName")
             try {
                 val loader = param.thisObject.javaClass.classLoader!!
@@ -177,6 +182,18 @@ object LoadApp {
         }
 
         XposedBridge.log("[TXHook-DIAG] entry() type=$type pid=${android.os.Process.myPid()}")
+
+        // 兜底：Application.onCreate 是进程启动必经入口，比 startup task 可靠。
+        // 主进程走 LoadDexTask 也能到，但 MSF 等子进程可能不执行 startup task 链。
+        // 直接把同一个 startup hook 再挂一份到 Application.onCreate。
+        runCatching {
+            val appCls = loader.loadClass("android.app.Application")
+            XposedBridge.hookAllMethods(appCls, "onCreate", startup)
+            XposedBridge.log("[TXHook-DIAG] 已挂 Application.onCreate 兜底 hook")
+        }.onFailure {
+            XposedBridge.log("[TXHook-DIAG] hook Application.onCreate 失败: $it")
+        }
+
         when (type) {
             0 -> handleNtQqHook(loader, startup)
             1 -> hookBooleanNoParamMethods(
