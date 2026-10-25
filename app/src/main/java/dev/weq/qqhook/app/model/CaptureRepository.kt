@@ -87,11 +87,14 @@ object CaptureRepository {
             }
             while (true) {
                 try {
-                    if (isCatchEnabled && !isBrowsingHistory) {
+                    // 抓包开关关闭时也要读：否则开关打开前产生的数据会一直堆着，
+                    // 而且用户可能刚启动 App 就想看已有数据。
+                    if (!isBrowsingHistory) {
                         val drained = FileInboxReader.drain()
                         if (drained.isNotEmpty()) {
+                            android.util.Log.i("CaptureRepository", "读到 ${drained.size} 条")
                             uiHandler.post {
-                                if (isCatchEnabled && !isBrowsingHistory) {
+                                if (!isBrowsingHistory) {
                                     for (p in drained) {
                                         p.uid = nextItemId()
                                         packets.add(p)
