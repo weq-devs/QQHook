@@ -44,6 +44,7 @@ class FloatingWindowService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         startForeground(NOTIFICATION_ID, buildNotification())
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         addFloatingView()
@@ -62,6 +63,7 @@ class FloatingWindowService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         container?.let { runCatching { windowManager.removeView(it) } }
         container = null
     }
@@ -199,6 +201,11 @@ class FloatingWindowService : Service() {
         private const val CHANNEL_ID = "qqhook_floating"
         private const val NOTIFICATION_ID = 0x5150
         const val ACTION_STOP = "dev.weq.qqhook.STOP_FLOATING"
+
+        /** 悬浮窗是否在运行。由 Service 的 onCreate / onDestroy 维护。 */
+        @Volatile
+        var isRunning: Boolean = false
+            private set
 
         fun start(context: Context) {
             val intent = Intent(context, FloatingWindowService::class.java)

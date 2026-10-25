@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Pause
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -91,6 +94,7 @@ fun MainScreen(
     var searchText by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var selectionMode by remember { mutableStateOf(false) }
+    var confirmClearAll by remember { mutableStateOf(false) }
     // 用 snapshot state 的 set，增删会触发重组
     val selectedSeqs = remember { mutableStateListOf<Int>() }
 
@@ -192,6 +196,11 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        if (displayList.isNotEmpty()) {
+                            IconButton(onClick = { confirmClearAll = true }) {
+                                Icon(Icons.Rounded.DeleteSweep, contentDescription = "清除全部")
+                            }
+                        }
                         IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) searchText = "" }) {
                             Icon(Icons.Rounded.Search, contentDescription = "搜索")
                         }
@@ -327,6 +336,28 @@ fun MainScreen(
             }
         }
     }
+
+    // 一键清除全部（当前列表 + 历史会话）
+    if (confirmClearAll) {
+        AlertDialog(
+            onDismissRequest = { confirmClearAll = false },
+            title = { Text("清除全部抓包？") },
+            text = { Text("将清空当前列表，并删除所有已保存的历史记录，不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    CaptureRepository.clearPackets()
+                    CaptureRepository.clearHistory()
+                    confirmClearAll = false
+                    exitSelection()
+                }) {
+                    Text("清除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearAll = false }) { Text("取消") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -342,6 +373,9 @@ private fun SelectionTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                // 状态栏 inset：多选栏是手写的，不像 TopAppBar 自带处理，
+                // 不加这行会和状态栏重合
+                .statusBarsPadding()
                 .padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

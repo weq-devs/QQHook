@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -129,10 +133,24 @@ fun SettingsScreen(onBack: () -> Unit) {
 @Composable
 private fun FloatingWindowCard() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val c = LocalCaptureColors.current
-    var enabled by remember { mutableStateOf(FloatingWindowState.isRunning) }
 
-    fun sync() { enabled = FloatingWindowState.isRunning }
+    // 真实运行状态由 Service 维护
+    var running by remember { mutableStateOf(FloatingWindowService.isRunning) }
+    // 悬浮窗权限：从设置页返回时要重新读
+    var hasPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                running = FloatingWindowService.isRunning
+                hasPermission = Settings.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -160,46 +178,39 @@ private fun FloatingWindowCard() {
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "在 QQ 上方显示开始 / 暂停按钮",
+                    if (hasPermission) "在 QQ 上方显示开始 / 暂停按钮"
+                    else "需要「显示在其他应用上层」权限",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (hasPermission) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.error,
                 )
             }
             Switch(
-                checked = enabled,
+                checked = running,
                 onCheckedChange = { want ->
                     if (!want) {
                         FloatingWindowService.stop(context)
-                        sync()
+                        running = false
                         return@Switch
                     }
                     if (Settings.canDrawOverlays(context)) {
                         FloatingWindowService.start(context)
-                        sync()
+                        running = true
                     } else {
-                        // 引导授权
-                        runCatching {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}"),
-                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
+                        // 跳去授权页；回来后 onResume 会刷新 hasPermission
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${context.packageName}"),
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val ok = runCatching { context.startActivity(intent) }.isSuccess
+                        if (!ok) {
+                            Toast.makeText(context, "无法打开权限设置页", Toast.LENGTH_SHORT).show()
                         }
-                        Toast.makeText(context, "请授予悬浮窗权限后重试", Toast.LENGTH_SHORT).show()
-                        sync()
                     }
                 },
             )
         }
     }
-}
-
-/** 记录悬浮窗是否在运行（进程内）。 */
-private object FloatingWindowState {
-    @Volatile
-    var isRunning: Boolean = false
-        private set
 }
 
 @Composable
