@@ -17,6 +17,7 @@ import dev.weq.qqhook.app.CatchProvider
 import dev.weq.qqhook.helper.EMPTY_BYTE_ARRAY
 import dev.weq.qqhook.helper.hex2ByteArray
 import dev.weq.qqhook.helper.toHexString
+import io.github.kyuubiran.ezxhelper.android.logging.Logger
 import moe.ore.xposed.hook.base.hostClassLoader
 import moe.ore.xposed.hook.base.hostPackageName
 import moe.ore.xposed.hook.base.hostVersionCode
@@ -187,19 +188,49 @@ object MainHook {
                 )
             )
         }
-        clazz?.hookMethod("onMSFPacketState")?.after {
-            val from = it.args[0]
-            val cmd = from.getField<String>("mCmd")
-            val seq = from.getField<Int>("mSeq")
-            val uin = from.getField<String>("mUin")
-            val data = from.getField<ByteArray>("mRecvData")
 
-            if (PacketDedupCache.shouldProcess(seq, "receive_$cmd", data)) {
-                sendTo("receive") {
-                    put("cmd", cmd); put("buffer", data)
-                    put("uin", uin); put("seq", seq)
-                    put("msgCookie", EMPTY_BYTE_ARRAY); put("type", "unknown")
+        // 诊断：定位收包 hook 失效原因
+        Logger.i(
+            "[TXHook-RECV] versionCode=$hostVersionCode " +
+                "branch=${if (hostVersionCode >= QQ_9_3_0_BATE_36720) "direct" else "fuzzy"} " +
+                "clazz=${clazz?.name ?: "NULL"}"
+        )
+
+        if (clazz == null) {
+            // 兜底：把所有候选类列出来，看新版到底在哪个类
+            val adapter = XPClassloader.load("com.tencent.mobileqq.msfcore.MSFResponseAdapter")
+            Logger.i("[TXHook-RECV] MSFResponseAdapter=${adapter?.name ?: "NULL"}")
+            val found = runCatching {
+                hostClassLoader.loadClass("com.tencent.mobileqq.msf.core.service.crossplatform.b")
+                    .declaredClasses
+                    .filter { c ->
+                        c.declaredMethods.any { it.name == "onMSFPacketState" }
+                    }
+            }.getOrNull()
+            Logger.i("[TXHook-RECV] 实际持有 onMSFPacketState 的类: ${found?.map { it.name }}")
+            return
+        }
+
+        val hook = clazz.hookMethod("onMSFPacketState")
+        Logger.i("[TXHook-RECV] hook 结果=${if (hook != null) "成功" else "失败"}")
+
+        hook?.after {
+            runCatching {
+                val from = it.args[0]
+                val cmd = from.getField<String>("mCmd")
+                val seq = from.getField<Int>("mSeq")
+                val uin = from.getField<String>("mUin")
+                val data = from.getField<ByteArray>("mRecvData")
+
+                if (PacketDedupCache.shouldProcess(seq, "receive_$cmd", data)) {
+                    sendTo("receive") {
+                        put("cmd", cmd); put("buffer", data)
+                        put("uin", uin); put("seq", seq)
+                        put("msgCookie", EMPTY_BYTE_ARRAY); put("type", "unknown")
+                    }
                 }
+            }.onFailure {
+                Logger.e("[TXHook-RECV] 读取响应字段失败", it)
             }
         }
     }
