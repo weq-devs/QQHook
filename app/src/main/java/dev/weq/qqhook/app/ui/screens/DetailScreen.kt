@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -103,10 +105,7 @@ fun DetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            androidx.compose.material.icons.Icons.Rounded.ArrowBack,
-                            contentDescription = "返回",
-                        )
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
@@ -205,10 +204,10 @@ fun DetailScreen(
                 if (mode == 0 && analysis != null) {
                     when {
                         analysis.protobuf != null && analysis.kind == PacketAnalyzer.Kind.PROTOBUF ->
-                            protobufFields(this, analysis.protobuf.fields)
+                            protobufFields(analysis.protobuf.fields)
 
                         analysis.jce != null && analysis.kind == PacketAnalyzer.Kind.JCE ->
-                            jceFields(this, analysis.jce.fields)
+                            jceFields(analysis.jce.fields)
 
                         analysis.text != null ->
                             item {
@@ -273,7 +272,7 @@ private fun ProtocolBanner(kind: String, confidence: Double, prefixLen: Int, bod
 
 // ---------------------------------------------------------------- 结构化渲染
 
-private fun protobufFields(list: androidx.compose.foundation.lazy.LazyListScope, fields: List<AutoParser.Field>) {
+private fun androidx.compose.foundation.lazy.LazyListScope.protobufFields(fields: List<AutoParser.Field>) {
     fields.forEach { f ->
         item(key = "pb-${f.offset}") {
             FieldRow(
@@ -287,7 +286,7 @@ private fun protobufFields(list: androidx.compose.foundation.lazy.LazyListScope,
     }
 }
 
-private fun jceFields(list: androidx.compose.foundation.lazy.LazyListScope, fields: List<JceLite.Field>) {
+private fun androidx.compose.foundation.lazy.LazyListScope.jceFields(fields: List<JceLite.Field>) {
     fields.forEach { f ->
         item(key = "jce-${f.offset}") {
             FieldRow(

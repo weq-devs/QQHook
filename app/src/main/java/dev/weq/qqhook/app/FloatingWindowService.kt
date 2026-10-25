@@ -19,6 +19,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import dev.weq.qqhook.R
 import dev.weq.qqhook.app.model.CaptureRepository
 
 /**
