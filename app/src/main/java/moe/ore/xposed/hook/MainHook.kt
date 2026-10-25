@@ -203,8 +203,6 @@ object MainHook {
 
         if (clazz == null) {
             XposedBridge.log("[TXHook] 收包 hook：未找到目标类（versionCode=$hostVersionCode）")
-        }
-
             return
         }
 
