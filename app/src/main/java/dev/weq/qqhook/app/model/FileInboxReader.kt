@@ -72,7 +72,8 @@ object FileInboxReader {
             Log.w(TAG, "QQ 未运行，跳过")
             return emptyList()
         }
-        return execRoot("nsenter -t $pid -m sh -c '$cmd'")
+        // nsenter 会把自己的 -c 当选项解析，用 -- 分隔；sh 用绝对路径
+        return execRoot("nsenter -t $pid -m -- /system/bin/sh -c '$cmd'")
     }
 
     private fun listInboxFiles(): List<String> {
