@@ -60,9 +60,23 @@ object FileInboxReader {
         return out
     }
 
+    /**
+     * 在 QQ 的 mount namespace 里执行命令。
+     *
+     * Magisk 给每个进程单独的 mount namespace，App 自己的 namespace 里
+     * 看不到别的应用的数据目录。必须 nsenter 到目标进程的 namespace。
+     */
+    private fun execInQqNamespace(cmd: String): List<String> {
+        val pid = execRoot("pidof $QQ_PKG").firstOrNull()?.trim().orEmpty()
+        if (pid.isEmpty()) {
+            Log.w(TAG, "QQ 未运行，跳过")
+            return emptyList()
+        }
+        return execRoot("nsenter -t $pid -m sh -c '$cmd'")
+    }
+
     private fun listInboxFiles(): List<String> {
-        // -1 按时间排序，只取 .jsonl
-        val output = execRoot("ls -1t $inboxPath").joinToString("\n")
+        val output = execInQqNamespace("ls -1t $inboxPath 2>/dev/null").joinToString("\n")
         if (output.isBlank()) return emptyList()
         return output.lineSequence()
             .map { it.trim() }
@@ -72,7 +86,7 @@ object FileInboxReader {
 
     /** 读取并立即删除，保证不重复消费。 */
     private fun readAndRemove(path: String): String? {
-        val lines = execRoot("cat $path 2>/dev/null; rm -f $path")
+        val lines = execInQqNamespace("cat $path; rm -f $path")
         if (lines.isEmpty()) return null
         return lines.joinToString("\n")
     }
