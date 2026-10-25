@@ -61,18 +61,13 @@ object LoadApp {
         val startup = afterHook(50) { param ->
             if (startupDone) return@afterHook
             startupDone = true
-            XposedBridge.log("[TXHook-DIAG] startup 回调触发 pid=${android.os.Process.myPid()} proc=$hostProcessName")
             try {
                 val loader = param.thisObject.javaClass.classLoader!!
                 XPClassloader.ctxClassLoader = loader
 
-                XposedBridge.log("[TXHook-DIAG] startup: 准备加载 Application 类, loader=$loader")
                 val clz = try {
-                    loader.loadClass("com.tencent.common.app.BaseApplicationImpl").also {
-                        XposedBridge.log("[TXHook-DIAG] startup: BaseApplicationImpl OK")
-                    }
+                    loader.loadClass("com.tencent.common.app.BaseApplicationImpl")
                 } catch (e: ClassNotFoundException) {
-                    XposedBridge.log("[TXHook-DIAG] startup: BaseApplicationImpl 缺失 -> 试 WatchApplicationDelegate")
                     Logger.e("loadClass BaseApplicationImpl failed", e)
                     loader.loadClass("com.tencent.qqnt.watch.app.WatchApplicationDelegate")
                 }
@@ -85,7 +80,6 @@ object LoadApp {
                     (field.get(null) as? Context)
                         ?: throw IllegalStateException("Application 静态实例为 null")
                 }
-                XposedBridge.log("[TXHook-DIAG] startup: 拿到 Context=${app.javaClass.name}")
                 if (!hostInit) {
                     hostApp = app as Application
                 }
@@ -104,7 +98,7 @@ object LoadApp {
                 }
             } catch (e: Exception) {
                 Logger.e("HookEntry startup failed", e)
-                XposedBridge.log("[TXHook-DIAG] startup 异常 pid=${android.os.Process.myPid()}: ${e}")
+                XposedBridge.log("[TXHook] startup 异常: $e")
             }
         }
 
@@ -152,31 +146,27 @@ object LoadApp {
             }
         }
 
-        XposedBridge.log("[TXHook-DIAG] handleNtQqHook 找到 ${fieldList.size} 个静态 Map 字段")
         var hooked = 0
         fieldList.forEach { field ->
             if (!field.isAccessible) field.isAccessible = true
             @Suppress("UNCHECKED_CAST")
             (field.get(null) as? Map<String, Class<*>>)?.forEach { (key, clazz) ->
                 if (key.contains("LoadDex", ignoreCase = true)) {
-                    XposedBridge.log("[TXHook-DIAG] 命中 LoadDex key=$key class=${clazz.name}")
                     clazz.declaredMethods.forEach { method ->
                         if (method.parameterTypes.size == 1 && method.parameterTypes[0] == Context::class.java) {
                             XposedBridge.hookMethod(method, hook)
                             hooked++
-                            XposedBridge.log("[TXHook-DIAG] hook 方法 ${method.name}")
                         }
                     }
                 }
             }
         }
-        XposedBridge.log("[TXHook-DIAG] handleNtQqHook 共 hook $hooked 个方法")
+        if (hooked == 0) {
+            XposedBridge.log("[TXHook] 警告：未找到任何启动 hook 点")
+        }
     }
 
     private fun entry(loader: ClassLoader, startup: XC_MethodHook) {
-        val diagProc = runCatching { hostProcessName }.getOrElse { "?" }
-        val diagPid = android.os.Process.myPid()
-        XposedBridge.log("[TXHook-DIAG] entry() pid=$diagPid proc=$diagProc")
         val type = when {
             classExists(loader, "com.tencent.mobileqq.startup.step.LoadDex") -> 1
             classExists(
@@ -187,17 +177,15 @@ object LoadApp {
             else -> 0
         }
 
-        XposedBridge.log("[TXHook-DIAG] entry() type=$type pid=${android.os.Process.myPid()}")
-
         // 兜底：Application.onCreate 是进程启动必经入口，比 startup task 可靠。
         // 主进程走 LoadDexTask 也能到，但 MSF 等子进程可能不执行 startup task 链。
         // 直接把同一个 startup hook 再挂一份到 Application.onCreate。
         runCatching {
             val appCls = loader.loadClass("android.app.Application")
             XposedBridge.hookAllMethods(appCls, "onCreate", startup)
-            XposedBridge.log("[TXHook-DIAG] 已挂 Application.onCreate 兜底 hook")
+            XposedBridge.log("[TXHook] 已挂 Application.onCreate 兜底 hook")
         }.onFailure {
-            XposedBridge.log("[TXHook-DIAG] hook Application.onCreate 失败: $it")
+            XposedBridge.log("[TXHook] hook Application.onCreate 失败: $it")
         }
 
         when (type) {
@@ -231,18 +219,6 @@ object LoadApp {
 
         if (injectClassloader(moduleClassLoader)) {
             // 诊断：进程判断在 Android 10+ 可能失效（runningAppProcesses 只返回自身）
-            val procNameDiag = runCatching { ProcUtil.procName }.getOrElse { "ERR:${it.message}" }
-            val isMsfDiag = runCatching { ProcUtil.isMsf }.getOrElse { false }
-            android.util.Log.i(
-                "TXHook-DIAG",
-                "[INIT] pid=${android.os.Process.myPid()} procName=$procNameDiag " +
-                    "isMsf=$isMsfDiag hostProcess=$hostProcessName",
-            )
-            XposedBridge.log(
-                "[TXHook-DIAG] pid=${android.os.Process.myPid()} procName=$procNameDiag " +
-                    "isMsf=$isMsfDiag hostProcess=$hostProcessName",
-            )
-
             AntiDetection() // 由于进程作用域不同，现在它不能放进isMsf的判断中
 
             if (ProcUtil.isMsf) {

@@ -201,59 +201,35 @@ object MainHook {
             )
         }
 
-        // 诊断：定位收包 hook 失效原因
-        XposedBridge.log(
-            "[TXHook-RECV] versionCode=$hostVersionCode " +
-                "branch=${if (hostVersionCode >= QQ_9_3_0_BATE_36720) "direct" else "fuzzy"} " +
-                "clazz=${clazz?.name ?: "NULL"}"
-        )
-
         if (clazz == null) {
-            // 兜底：把所有候选类列出来，看新版到底在哪个类
-            val adapter = XPClassloader.load("com.tencent.mobileqq.msfcore.MSFResponseAdapter")
-            XposedBridge.log("[TXHook-RECV] MSFResponseAdapter=${adapter?.name ?: "NULL"}")
-            val found = runCatching {
-                hostClassLoader.loadClass("com.tencent.mobileqq.msf.core.service.crossplatform.b")
-                    .declaredClasses
-                    .filter { c ->
-                        c.declaredMethods.any { it.name == "onMSFPacketState" }
-                    }
-            }.getOrNull()
-            XposedBridge.log("[TXHook-RECV] 实际持有 onMSFPacketState 的类: ${found?.map { it.name }}")
+            XposedBridge.log("[TXHook] 收包 hook：未找到目标类（versionCode=$hostVersionCode）")
+        }
+
             return
         }
 
         val hook = clazz.hookMethod("onMSFPacketState")
-        XposedBridge.log("[TXHook-RECV] hook 结果=${if (hook != null) "成功" else "失败"}")
+        if (hook == null) {
+            XposedBridge.log("[TXHook] 收包 hook 安装失败: ${clazz.name}")
+        }
 
         hook?.after {
             runCatching {
                 val from = it.args[0]
-                XposedBridge.log("[TXHook-RECV] ★回调触发 args=${it.args.size} cls=${from?.javaClass?.name}")
                 val cmd = from.getField<String>("mCmd")
-                XposedBridge.log("[TXHook-RECV]   cmd=$cmd")
                 val seq = from.getField<Int>("mSeq")
                 val uin = from.getField<String>("mUin")
                 val data = from.getField<ByteArray>("mRecvData")
-                XposedBridge.log("[TXHook-RECV]   seq=$seq uin=$uin size=${data?.size}")
 
-                val dedup = PacketDedupCache.shouldProcess(seq, "receive_$cmd", data)
-                XposedBridge.log("[TXHook-RECV]   dedup=$dedup")
-                if (dedup) {
-                    XposedBridge.log("[TXHook-RECV]   准备调用 sendTo")
-                    try {
-                        sendTo("receive") {
-                            put("cmd", cmd); put("buffer", data)
-                            put("uin", uin); put("seq", seq)
-                            put("msgCookie", EMPTY_BYTE_ARRAY); put("type", "unknown")
-                        }
-                        XposedBridge.log("[TXHook-RECV]   sendTo 返回成功")
-                    } catch (t: Throwable) {
-                        XposedBridge.log("[TXHook-RECV]   sendTo 抛出: $t")
+                if (PacketDedupCache.shouldProcess(seq, "receive_$cmd", data)) {
+                    sendTo("receive") {
+                        put("cmd", cmd); put("buffer", data)
+                        put("uin", uin); put("seq", seq)
+                        put("msgCookie", EMPTY_BYTE_ARRAY); put("type", "unknown")
                     }
                 }
             }.onFailure {
-                XposedBridge.log("[TXHook-RECV] 读取响应字段失败: $it")
+                XposedBridge.log("[TXHook] 读取响应字段失败: $it")
             }
         }
     }
