@@ -57,9 +57,23 @@ public final class HttpUtil {
             }
 
             // tryToConnectWS();
-            if ("running".equals(contentResolver.getType(URI_GET_TXHOOK_STATE))) {
+            String state = null;
+            try {
+                state = contentResolver.getType(URI_GET_TXHOOK_STATE);
+            } catch (Throwable t) {
+                de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] getType 异常: " + t);
+            }
+            de.robv.android.xposed.XposedBridge.log(
+                "[TXHook-SEND] mode=" + mode + " url=" + (url == null ? "null" : url)
+                    + " providerState=" + state);
+            if ("running".equals(state)) {
                 contentValues.put("source", source);
-                contentResolver.insert(uri, contentValues);
+                try {
+                    contentResolver.insert(uri, contentValues);
+                    de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] insert OK mode=" + mode);
+                } catch (Throwable t) {
+                    de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] insert 失败: " + t);
+                }
                 // 如果查询不到状态就不发了
             }
         } catch (IllegalArgumentException ignored) {
