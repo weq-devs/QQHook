@@ -137,19 +137,25 @@ object LoadApp {
             }
         }
 
+        XposedBridge.log("[TXHook-DIAG] handleNtQqHook 找到 ${fieldList.size} 个静态 Map 字段")
+        var hooked = 0
         fieldList.forEach { field ->
             if (!field.isAccessible) field.isAccessible = true
             @Suppress("UNCHECKED_CAST")
             (field.get(null) as? Map<String, Class<*>>)?.forEach { (key, clazz) ->
                 if (key.contains("LoadDex", ignoreCase = true)) {
+                    XposedBridge.log("[TXHook-DIAG] 命中 LoadDex key=$key class=${clazz.name}")
                     clazz.declaredMethods.forEach { method ->
                         if (method.parameterTypes.size == 1 && method.parameterTypes[0] == Context::class.java) {
                             XposedBridge.hookMethod(method, hook)
+                            hooked++
+                            XposedBridge.log("[TXHook-DIAG] hook 方法 ${method.name}")
                         }
                     }
                 }
             }
         }
+        XposedBridge.log("[TXHook-DIAG] handleNtQqHook 共 hook $hooked 个方法")
     }
 
     private fun entry(loader: ClassLoader, startup: XC_MethodHook) {
