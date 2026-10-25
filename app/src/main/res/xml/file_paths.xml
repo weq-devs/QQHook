@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 导出失败时退回 cache 目录 -->
+    <cache-path name="cache" path="." />
+    <files-path name="files" path="." />
+    <external-files-path name="external" path="." />
+    <!-- 公共 Downloads/QQHook 目录（Android 10+ 通过 FileProvider 共享） -->
+    <external-path name="downloads" path="Download/QQHook/" />
+</paths>

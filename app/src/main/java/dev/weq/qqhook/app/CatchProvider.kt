@@ -64,24 +64,6 @@ class CatchProvider : ContentProvider() {
         if (AndroKtx.isInit) values?.let { value ->
             catchHandler?.let { handler ->
                 when (value.getAsString("mode")) {
-                    "md5" -> handler.handleMd5(
-                        value.getAsInteger("source"),
-                        (value.get("data") as? ByteArray) ?: EMPTY_BYTE_ARRAY,
-                        (value.get("result") as? ByteArray) ?: EMPTY_BYTE_ARRAY,
-                    )
-
-                    "tlv.get_buf" -> handler.handleTlvGet(
-                        value.getAsInteger("version"),
-                        (value.get("data") as? ByteArray) ?: EMPTY_BYTE_ARRAY,
-                        value.getAsInteger("source"),
-                    )
-
-                    "tlv.set_buf" -> handler.handleTlvSet(
-                        value.getAsInteger("version"),
-                        (value.get("data") as? ByteArray) ?: EMPTY_BYTE_ARRAY,
-                        value.getAsInteger("source"),
-                    )
-
                     "receive" -> handler.handlePacket(
                         System.currentTimeMillis(), CapturePacket(
                             true,
@@ -113,14 +95,6 @@ class CatchProvider : ContentProvider() {
                             source = value.getAsInteger("source")
                         )
                     )
-
-                    "tea" -> handler.handleTea(
-                        value.getAsBoolean("enc"),
-                        (value.get("data") as? ByteArray) ?: EMPTY_BYTE_ARRAY,
-                        (value.get("key") as? ByteArray) ?: EMPTY_BYTE_ARRAY,
-                        (value.get("result") as? ByteArray) ?: EMPTY_BYTE_ARRAY,
-                        value.getAsInteger("source")
-                    )
                 }
             }
         }
@@ -147,21 +121,8 @@ class CatchProvider : ContentProvider() {
         var catchHandler: CatchHandler? = null
 
         abstract class CatchHandler {
-            abstract fun handleMd5(source: Int, data: ByteArray, result: ByteArray)
-
-            abstract fun handleTlvSet(tlv: Int, buf: ByteArray, source: Int)
-
-            abstract fun handleTlvGet(tlv: Int, buf: ByteArray, source: Int)
-
+            /** 只处理 SSO 包；TEA / TLV / MD5 之类的 action 已不再展示。 */
             abstract fun handlePacket(time: Long, packet: CapturePacket)
-
-            abstract fun handleTea(
-                isEnc: Boolean,
-                data: ByteArray,
-                key: ByteArray,
-                result: ByteArray,
-                source: Int
-            )
         }
     }
 }

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/bg_floating_pill"
+    android:paddingStart="12dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp"
+    android:elevation="8dp">
+
+    <View
+        android:layout_width="7dp"
+        android:layout_height="7dp"
+        android:background="@drawable/bg_floating_dot" />
+
+    <TextView
+        android:id="@+id/floating_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="7dp"
+        android:text="抓包中"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:textColor="#2ECC71" />
+
+    <TextView
+        android:id="@+id/floating_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:text="0"
+        android:textSize="11sp"
+        android:textColor="#9AA0A6" />
+
+    <ImageView
+        android:id="@+id/floating_toggle"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_marginStart="6dp"
+        android:padding="5dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/icon_nocatch"
+        android:contentDescription="开始或暂停" />
+
+    <ImageView
+        android:id="@+id/floating_close"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:padding="6dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_baseline_close_24"
+        android:contentDescription="关闭悬浮窗" />
+
+</LinearLayout>

@@ -80,9 +80,6 @@ object MainHook {
         dispatchEventHook()
         hookMSFKernelPacket()
         hookCodecWarpperInit()
-        hookMD5()
-        hookTlv()
-        hookTea()
         hookSendPacket()
         hookBDH()
         hookParams()
@@ -422,26 +419,6 @@ object MainHook {
                 val ver = cmdField.get(it.thisObject) as Int
                 sendTo(MODE_TLV_SET_BUF) { put("data", result); put("version", ver) }
             }
-        }
-    }
-
-    // ==================== TEA ====================
-
-    private fun hookTea() {
-        cryptor.hookMethod("encrypt")?.after { handleTeaHook(it, true) }
-        cryptor.hookMethod("decrypt")?.after { handleTeaHook(it, false) }
-    }
-
-    private fun handleTeaHook(param: MethodHookParam, isEnc: Boolean) {
-        val len = param.args[2] as Int
-        if (len <= 0) return
-
-        val skip = param.args[1] as Int
-        val data = (param.args[0] as ByteArray).copyOfRange(skip, skip + len)
-        sendTo(MODE_TEA) {
-            put("enc", isEnc); put("data", data.toHexString()); put("len", len)
-            put("key", (param.args[3] as ByteArray).toHexString())
-            put("result", (param.result as ByteArray).toHexString())
         }
     }
 

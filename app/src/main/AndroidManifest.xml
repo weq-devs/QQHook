@@ -3,6 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 悬浮窗：在 QQ 之上显示开始 / 暂停控制条 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 前台服务：保证悬浮窗与抓包在切后台时存活 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name="moe.ore.android.Application"
@@ -26,17 +32,10 @@
 
         </activity>
 
-        <activity android:name=".app.TeaActivity" />
-        <activity android:name=".app.TlvActivity" />
-        <activity android:name=".app.Md5Activity" />
         <activity
-            android:name=".app.PacketActivity"
+            android:name=".app.DetailActivity"
             android:configChanges="orientation|screenSize"
-            android:exported="true" />
-        <activity
-            android:name=".app.ParserActivity"
-            android:configChanges="orientation|screenSize"
-            android:exported="true" />
+            android:exported="false" />
 
         <provider
             android:name=".app.CatchProvider"
@@ -44,6 +43,26 @@
             android:exported="true"
             android:grantUriPermissions="true"
             tools:ignore="ExportedContentProvider" />
+
+        <!-- 导出文件分享 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <service
+            android:name=".app.FloatingWindowService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="capture_control_overlay" />
+        </service>
 
         <meta-data
             android:name="xposedmodule"

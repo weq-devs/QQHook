@@ -4,48 +4,11 @@ import android.os.Parcel
 import android.os.Parcelable
 import dev.weq.qqhook.helper.EMPTY_BYTE_ARRAY
 
-data class CaptureAction(
-    var type: Int = 0,
-) : Parcelable {
-    var uid: Long = 0L
-    var what: Int = 0
-    var from: Boolean = false
-    val time: Long = System.currentTimeMillis()
-    var buffer: ByteArray = EMPTY_BYTE_ARRAY
-    var result: ByteArray = EMPTY_BYTE_ARRAY
-    var source: Int = SourceApp.MQQ
-    var key: ByteArray = EMPTY_BYTE_ARRAY
-
-    constructor(parcel: Parcel) : this(parcel.readInt()) {
-        what = parcel.readInt()
-        from = parcel.readByte() != 0.toByte()
-        buffer = parcel.createByteArray() ?: EMPTY_BYTE_ARRAY
-        result = parcel.createByteArray() ?: EMPTY_BYTE_ARRAY
-        source = parcel.readInt()
-        key = parcel.createByteArray() ?: EMPTY_BYTE_ARRAY
-    }
-
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeInt(type)
-        parcel.writeInt(what)
-        parcel.writeByte(if (from) 1 else 0)
-        parcel.writeByteArray(buffer)
-        parcel.writeByteArray(result)
-        parcel.writeInt(source)
-        parcel.writeByteArray(key)
-    }
-
-    override fun describeContents(): Int = 0
-
-    companion object CREATOR : Parcelable.Creator<CaptureAction> {
-        override fun createFromParcel(parcel: Parcel): CaptureAction = CaptureAction(parcel)
-        override fun newArray(size: Int): Array<CaptureAction?> = arrayOfNulls(size)
-    }
-}
-
+/** 一条 SSO 抓包记录。收 / 发共用一种结构，靠 [from] 区分方向。 */
 data class CapturePacket(
+    /** true = 接收（服务器 → 客户端），false = 发送 */
     var from: Boolean = false,
-    var cmd: String = "wtlogin.login",
+    var cmd: String = "",
     var seq: Int = 0,
     var buffer: ByteArray = EMPTY_BYTE_ARRAY,
     var time: Long = 0L,
@@ -69,6 +32,7 @@ data class CapturePacket(
         parcel.readInt(),
         parcel.readByte() != 0.toByte(),
         parcel.readInt(),
+        parcel.readLong(),
     )
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
@@ -83,6 +47,7 @@ data class CapturePacket(
         parcel.writeInt(source)
         parcel.writeByte(if (merge) 1 else 0)
         parcel.writeInt(hash)
+        parcel.writeLong(uid)
     }
 
     override fun describeContents(): Int = 0
@@ -90,11 +55,34 @@ data class CapturePacket(
     companion object CREATOR : Parcelable.Creator<CapturePacket> {
         override fun createFromParcel(parcel: Parcel): CapturePacket = CapturePacket(parcel)
         override fun newArray(size: Int): Array<CapturePacket?> = arrayOfNulls(size)
-
-        fun create(buffer: ByteArray): CapturePacket {
-            return CapturePacket(buffer = buffer)
-        }
     }
+}
+
+/**
+ * 同一个 seq 的收 / 发两条包合并成的「一次交互」。
+ *
+ * QQ 的 SSO 用 seq 关联请求与响应，同 seq 的发包和回包天然是一对，
+ * 列表里合并成一张卡片比两条独立记录好读得多。
+ */
+data class CaptureExchange(
+    val seq: Int,
+    val cmd: String,
+    val request: CapturePacket?,
+    val response: CapturePacket?,
+) {
+    val latestTime: Long = maxOf(request?.time ?: 0L, response?.time ?: 0L)
+    val uid: Long = request?.uid ?: response?.uid ?: seq.toLong()
+    val requestSize: Int = request?.buffer?.size ?: 0
+    val responseSize: Int = response?.buffer?.size ?: 0
+    val uin: Long = request?.uin ?: response?.uin ?: 0L
+    val source: Int = request?.source ?: response?.source ?: SourceApp.MQQ
+
+    /** 响应耗时（毫秒）；缺一侧时为 null。 */
+    val costMs: Long? =
+        if (request != null && response != null) (response.time - request.time).coerceAtLeast(0)
+        else null
+
+    val hasError: Boolean = response == null && request != null
 }
 
 object SourceApp {

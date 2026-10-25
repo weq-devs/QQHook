@@ -20,7 +20,6 @@ import java.util.Objects;
 
 import moe.ore.android.dialog.Dialog;
 import moe.ore.android.util.AndroidUtil;
-import dev.weq.qqhook.app.ParserActivity;
 import dev.weq.qqhook.app.model.CapturePacket;
 import dev.weq.qqhook.helper.HexUtil;
 
@@ -329,24 +328,7 @@ public class JsonViewerAdapter extends BaseJsonViewerAdapter<JsonViewerAdapter.J
                         return null;
                     });
                     // <<============================ quick parser actions
-                    if (isHex) {
-                        builder.addItem("JCE\u6570\u636e\u89e3\u6790", (dialog, view1, integer) -> {
-                            dialog.dismiss();
-                            Intent intent = new Intent(context, ParserActivity.class);
-                            intent.putExtra("data", CapturePacket.CREATOR.create(HexUtil.Hex2Bin(v)));
-                            intent.putExtra("jce", true);
-                            context.startActivity(intent);
-                            return null;
-                        });
-                        builder.addItem("Protobuf\u89e3\u6790", (dialog, view1, integer) -> {
-                            dialog.dismiss();
-                            Intent intent = new Intent(context, ParserActivity.class);
-                            intent.putExtra("data", CapturePacket.CREATOR.create(HexUtil.Hex2Bin(v)));
-                            intent.putExtra("jce", false);
-                            context.startActivity(intent);
-                            return null;
-                        });
-                    }
+                    // 结构解析已并入详情页的自动识别，这里不再单独提供 JCE / Protobuf 入口
                     if (isHex || isNoHex) {
                         builder.addItem(isHex ? "\u8f6c\u4e3a\u5b57\u7b26\u4e32" : "\u8f6c\u4e3aHex", (dialog, view1, integer) -> {
                             dialog.dismiss();
