@@ -78,13 +78,25 @@ object MainHook {
         HttpUtil.contextWeakReference = java.lang.ref.WeakReference(ctx)
         this.source = source
 
-        dispatchEventHook()
-        hookMSFKernelPacket()
-        hookCodecWarpperInit()
-        hookSendPacket()
-        hookBDH()
-        hookParams()
-        hookReceData(AntiDetection.isSupportedQQVersion(hostPackageName, hostVersionCode))
+        // 每个 hook 单独 try：任何一个类不存在都不该拖垮其余 hook
+        fun step(name: String, block: () -> Unit) {
+            try {
+                block()
+                XposedBridge.log("[TXHook-STEP] $name OK")
+            } catch (t: Throwable) {
+                XposedBridge.log("[TXHook-STEP] $name FAILED: $t")
+            }
+        }
+
+        step("dispatchEventHook") { dispatchEventHook() }
+        step("hookMSFKernelPacket") { hookMSFKernelPacket() }
+        step("hookCodecWarpperInit") { hookCodecWarpperInit() }
+        step("hookSendPacket") { hookSendPacket() }
+        step("hookBDH") { hookBDH() }
+        step("hookParams") { hookParams() }
+        step("hookReceData") {
+            hookReceData(AntiDetection.isSupportedQQVersion(hostPackageName, hostVersionCode))
+        }
     }
 
     // ==================== CodecWrapper Init ====================
