@@ -209,6 +209,20 @@ fun DetailScreen(
                         analysis.jce != null && analysis.kind == PacketAnalyzer.Kind.JCE ->
                             jceFields(analysis.jce.fields)
 
+                        // TRPC 信封：只展示服务名，剩余二进制体提示看 HEX
+                        analysis.kind == PacketAnalyzer.Kind.TRPC -> item {
+                            Text(
+                                "TRPC 信封\n\n${analysis.text ?: ""}\n\n" +
+                                    "包体前段是协议元数据与二进制参数，完整内容请看 HEX 视图。",
+                                style = MonoStyle,
+                                color = c.onCodeBackground,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(c.codeBackground, RoundedCornerShape(10.dp))
+                                    .padding(12.dp),
+                            )
+                        }
+
                         analysis.text != null ->
                             item {
                                 TextCard(analysis.text, c.codeBackground, c.onCodeBackground)
@@ -239,6 +253,7 @@ private fun ProtocolBanner(kind: String, confidence: Double, prefixLen: Int, bod
     val color = when (kind) {
         "PROTOBUF" -> c.proto
         "JCE" -> c.jce
+        "TRPC" -> c.send
         "TEXT" -> c.text
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
