@@ -90,24 +90,22 @@ fun MainScreen(
     var searchText by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var selectionMode by remember { mutableStateOf(false) }
-    val selectedSeqs = remember { mutableSetOf<Int>() }
-    var selectionVersion by remember { mutableIntStateOf(0) }
+    // 用 snapshot state 的 set，增删会触发重组
+    val selectedSeqs = remember { mutableStateListOf<Int>() }
 
     val packets = CaptureRepository.packets
-    val generation = CaptureRepository.packetGeneration
     val isCatching = CaptureRepository.isCatchEnabled
 
-    // 按 seq 合并 + 搜索过滤
-    val exchanges by remember(generation, searchText) {
-        derivedStateOf {
-            val grouped = ExchangeGrouper.group(CaptureRepository.packets)
-            val q = searchText.trim()
-            if (q.isBlank()) grouped
-            else grouped.filter {
-                it.cmd.contains(q, ignoreCase = true) ||
-                    it.seq.toString().contains(q) ||
-                    it.uin.toString().contains(q)
-            }
+    // 按 seq 合并 + 搜索过滤。
+    // 直接读 snapshot list：列表增删会自动触发重组，不需要额外的 generation 依赖。
+    val exchanges = remember(packets.size, packets.firstOrNull()?.uid, packets.lastOrNull()?.uid, searchText) {
+        val grouped = ExchangeGrouper.group(packets)
+        val q = searchText.trim()
+        if (q.isBlank()) grouped
+        else grouped.filter {
+            it.cmd.contains(q, ignoreCase = true) ||
+                it.seq.toString().contains(q) ||
+                it.uin.toString().contains(q)
         }
     }
 
@@ -132,15 +130,13 @@ fun MainScreen(
     val displayList = remember(exchanges) { exchanges.asReversed() }
 
     fun toggleSelect(seq: Int) {
-        if (!selectedSeqs.add(seq)) selectedSeqs.remove(seq)
-        selectionVersion++
+        if (!selectedSeqs.remove(seq)) selectedSeqs.add(seq)
         if (selectedSeqs.isEmpty()) selectionMode = false
     }
 
     fun exitSelection() {
         selectionMode = false
         selectedSeqs.clear()
-        selectionVersion++
     }
 
     Scaffold(
@@ -151,8 +147,10 @@ fun MainScreen(
                     allSelected = selectedSeqs.size == displayList.size,
                     onSelectAll = {
                         if (selectedSeqs.size == displayList.size) selectedSeqs.clear()
-                        else displayList.forEach { selectedSeqs.add(it.seq) }
-                        selectionVersion++
+                        else {
+                            selectedSeqs.clear()
+                            displayList.forEach { selectedSeqs.add(it.seq) }
+                        }
                         if (selectedSeqs.isEmpty()) selectionMode = false
                     },
                     onExport = {
@@ -298,7 +296,6 @@ fun MainScreen(
                                         selectionMode = true
                                         selectedSeqs.clear()
                                         selectedSeqs.add(exchange.seq)
-                                        selectionVersion++
                                     } else {
                                         toggleSelect(exchange.seq)
                                     }
