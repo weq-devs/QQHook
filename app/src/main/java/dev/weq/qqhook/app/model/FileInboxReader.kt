@@ -75,19 +75,33 @@ object FileInboxReader {
         return lines.joinToString("\n")
     }
 
+    /** su 的绝对路径：App 进程的 PATH 里通常没有。 */
+    private val suPath: String by lazy {
+        listOf(
+            "/system/bin/su",
+            "/system/xbin/su",
+            "/sbin/su",
+            "/su/bin/su",
+            "/debug_ramdisk/su",
+        ).firstOrNull { java.io.File(it).exists() } ?: "su"
+    }
+
     /** 以 root 执行命令，返回输出行。 */
     private fun execRoot(cmd: String): List<String> {
         return runCatching {
-            val proc = ProcessBuilder("su", "-c", cmd)
+            val proc = ProcessBuilder(suPath, "-c", cmd)
                 .redirectErrorStream(true)
                 .start()
             val lines = BufferedReader(InputStreamReader(proc.inputStream)).use { r ->
                 r.lineSequence().toList()
             }
-            proc.waitFor()
+            val code = proc.waitFor()
+            if (code != 0) {
+                Log.w(TAG, "su 退出码=$code cmd=$cmd out=${lines.take(3)}")
+            }
             lines
         }.getOrElse {
-            Log.w(TAG, "su 执行失败: $cmd", it)
+            Log.w(TAG, "su 执行失败(su=$suPath): $cmd", it)
             emptyList()
         }
     }
