@@ -55,6 +55,7 @@ object LoadApp {
         hostClassLoader = lpparam.classLoader
 
         val startup = afterHook(50) { param ->
+            XposedBridge.log("[TXHook-DIAG] startup 回调触发 pid=${android.os.Process.myPid()} proc=$hostProcessName")
             try {
                 val loader = param.thisObject.javaClass.classLoader!!
                 XPClassloader.ctxClassLoader = loader
@@ -88,6 +89,7 @@ object LoadApp {
                 }
             } catch (e: Exception) {
                 Logger.e("HookEntry startup failed", e)
+                XposedBridge.log("[TXHook-DIAG] startup 异常 pid=${android.os.Process.myPid()}: ${e}")
             }
         }
 
@@ -151,6 +153,9 @@ object LoadApp {
     }
 
     private fun entry(loader: ClassLoader, startup: XC_MethodHook) {
+        val diagProc = runCatching { hostProcessName }.getOrElse { "?" }
+        val diagPid = android.os.Process.myPid()
+        XposedBridge.log("[TXHook-DIAG] entry() pid=$diagPid proc=$diagProc")
         val type = when {
             classExists(loader, "com.tencent.mobileqq.startup.step.LoadDex") -> 1
             classExists(
@@ -161,6 +166,7 @@ object LoadApp {
             else -> 0
         }
 
+        XposedBridge.log("[TXHook-DIAG] entry() type=$type pid=${android.os.Process.myPid()}")
         when (type) {
             0 -> handleNtQqHook(loader, startup)
             1 -> hookBooleanNoParamMethods(
