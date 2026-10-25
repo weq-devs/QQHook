@@ -2,6 +2,8 @@ package moe.ore.xposed.utils;
 
 import android.content.ContentValues;
 
+import dev.weq.qqhook.helper.HexUtil;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
