@@ -75,11 +75,16 @@ object LoadApp {
                     Logger.e("loadClass BaseApplicationImpl failed", e)
                     loader.loadClass("com.tencent.qqnt.watch.app.WatchApplicationDelegate")
                 }
-                val field = clz.declaredFields.first {
-                    it.type == clz
+                // 优先直接用触发回调的 Application 实例：
+                // Application.onCreate 阶段静态 INSTANCE 字段可能还没赋值。
+                val app: Context = (param.thisObject as? Context) ?: run {
+                    val field = clz.declaredFields.firstOrNull { it.type == clz }
+                        ?: throw IllegalStateException("找不到 Application 实例字段")
+                    field.isAccessible = true
+                    (field.get(null) as? Context)
+                        ?: throw IllegalStateException("Application 静态实例为 null")
                 }
-
-                val app: Context = field.get(null) as Context
+                XposedBridge.log("[TXHook-DIAG] startup: 拿到 Context=${app.javaClass.name}")
                 if (!hostInit) {
                     hostApp = app as Application
                 }
