@@ -37,6 +37,15 @@ object CaptureRepository {
     var sessionStartedAt by mutableStateOf(0L)
         private set
 
+    /**
+     * 当前列表是不是从历史载入的。
+     *
+     * true 时新抓到的包不会混进来，也不会把这份数据写回历史文件
+     * （否则会覆盖掉原始记录）。
+     */
+    var isBrowsingHistory by mutableStateOf(false)
+        private set
+
     /** 已读的 seq 集合（查看过的卡片变灰）。 */
     val readSeqs = mutableStateListOf<Int>()
 
@@ -60,7 +69,11 @@ object CaptureRepository {
 
     fun updateCatchEnabled(enabled: Boolean) {
         if (enabled && !isCatchEnabled) {
-            // 开始新一轮抓包：开一个新会话
+            // 开始新一轮抓包：退出历史浏览、清掉上一轮残留、开新会话
+            isBrowsingHistory = false
+            packets.clear()
+            readSeqs.clear()
+            packetGeneration++
             sessionStartedAt = System.currentTimeMillis()
         }
         isCatchEnabled = enabled
@@ -73,7 +86,7 @@ object CaptureRepository {
     /** 把当前会话写到历史。停止抓包 / 切到历史 / 退出时调用。 */
     fun flushSession() {
         val start = sessionStartedAt
-        if (start == 0L || packets.isEmpty()) return
+        if (start == 0L || packets.isEmpty() || isBrowsingHistory) return
         CaptureStore.saveSessionAsync(
             startedAt = start,
             endedAt = System.currentTimeMillis(),
@@ -85,7 +98,8 @@ object CaptureRepository {
     private fun addPacket(packet: CapturePacket) {
         val id = nextItemId()
         uiHandler.post {
-            if (isCatchEnabled) {
+            // 浏览历史时不接收新包，避免污染正在看的那次记录
+            if (isCatchEnabled && !isBrowsingHistory) {
                 packet.uid = id
                 packets.add(packet)
                 packetGeneration++
@@ -97,6 +111,7 @@ object CaptureRepository {
         packets.clear()
         readSeqs.clear()
         packetGeneration++
+        isBrowsingHistory = false
         sessionStartedAt = if (isCatchEnabled) System.currentTimeMillis() else 0L
     }
 
@@ -139,6 +154,7 @@ object CaptureRepository {
         readSeqs.clear()
         readSeqs.addAll(CaptureStore.loadReadSeqs(id))
         sessionStartedAt = id
+        isBrowsingHistory = true
         packetGeneration++
         return true
     }

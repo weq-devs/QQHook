@@ -96,6 +96,7 @@ fun MainScreen(
 
     val packets = CaptureRepository.packets
     val isCatching = CaptureRepository.isCatchEnabled
+    val browsingHistory = CaptureRepository.isBrowsingHistory
 
     // 按 seq 合并 + 搜索过滤。
     // 直接读 snapshot list：列表增删会自动触发重组，不需要额外的 generation 依赖。
@@ -176,10 +177,17 @@ fun MainScreen(
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                if (isCatching) "抓包中 · ${exchanges.size} 次交互"
-                                else "${exchanges.size} 次交互 · 已暂停",
+                                when {
+                                    browsingHistory -> "历史记录 · ${exchanges.size} 次交互"
+                                    isCatching -> "抓包中 · ${exchanges.size} 次交互"
+                                    else -> "${exchanges.size} 次交互 · 已暂停"
+                                },
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (isCatching) c.recv else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = when {
+                                    browsingHistory -> c.jce
+                                    isCatching -> c.recv
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                             )
                         }
                     },
@@ -202,7 +210,18 @@ fun MainScreen(
         },
         floatingActionButton = {
             if (!selectionMode) {
-                ExtendedFloatingActionButton(
+                if (browsingHistory) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            // 退出历史浏览，回到实时抓包
+                            CaptureRepository.updateCatchEnabled(true)
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        icon = { Icon(Icons.Rounded.PlayArrow, contentDescription = null) },
+                        text = { Text("回到抓包") },
+                    )
+                } else ExtendedFloatingActionButton(
                     onClick = { CaptureRepository.updateCatchEnabled(!isCatching) },
                     containerColor = if (isCatching)
                         MaterialTheme.colorScheme.errorContainer
