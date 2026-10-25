@@ -190,7 +190,7 @@ object MainHook {
         }
 
         // 诊断：定位收包 hook 失效原因
-        Logger.i(
+        XposedBridge.log(
             "[TXHook-RECV] versionCode=$hostVersionCode " +
                 "branch=${if (hostVersionCode >= QQ_9_3_0_BATE_36720) "direct" else "fuzzy"} " +
                 "clazz=${clazz?.name ?: "NULL"}"
@@ -199,7 +199,7 @@ object MainHook {
         if (clazz == null) {
             // 兜底：把所有候选类列出来，看新版到底在哪个类
             val adapter = XPClassloader.load("com.tencent.mobileqq.msfcore.MSFResponseAdapter")
-            Logger.i("[TXHook-RECV] MSFResponseAdapter=${adapter?.name ?: "NULL"}")
+            XposedBridge.log("[TXHook-RECV] MSFResponseAdapter=${adapter?.name ?: "NULL"}")
             val found = runCatching {
                 hostClassLoader.loadClass("com.tencent.mobileqq.msf.core.service.crossplatform.b")
                     .declaredClasses
@@ -207,12 +207,12 @@ object MainHook {
                         c.declaredMethods.any { it.name == "onMSFPacketState" }
                     }
             }.getOrNull()
-            Logger.i("[TXHook-RECV] 实际持有 onMSFPacketState 的类: ${found?.map { it.name }}")
+            XposedBridge.log("[TXHook-RECV] 实际持有 onMSFPacketState 的类: ${found?.map { it.name }}")
             return
         }
 
         val hook = clazz.hookMethod("onMSFPacketState")
-        Logger.i("[TXHook-RECV] hook 结果=${if (hook != null) "成功" else "失败"}")
+        XposedBridge.log("[TXHook-RECV] hook 结果=${if (hook != null) "成功" else "失败"}")
 
         hook?.after {
             runCatching {
@@ -230,7 +230,7 @@ object MainHook {
                     }
                 }
             }.onFailure {
-                Logger.e("[TXHook-RECV] 读取响应字段失败", it)
+                XposedBridge.log("[TXHook-RECV] 读取响应字段失败: $it")
             }
         }
     }
