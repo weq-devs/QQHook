@@ -60,9 +60,13 @@ object LoadApp {
                 val loader = param.thisObject.javaClass.classLoader!!
                 XPClassloader.ctxClassLoader = loader
 
+                XposedBridge.log("[TXHook-DIAG] startup: 准备加载 Application 类, loader=$loader")
                 val clz = try {
-                    loader.loadClass("com.tencent.common.app.BaseApplicationImpl")
+                    loader.loadClass("com.tencent.common.app.BaseApplicationImpl").also {
+                        XposedBridge.log("[TXHook-DIAG] startup: BaseApplicationImpl OK")
+                    }
                 } catch (e: ClassNotFoundException) {
+                    XposedBridge.log("[TXHook-DIAG] startup: BaseApplicationImpl 缺失 -> 试 WatchApplicationDelegate")
                     Logger.e("loadClass BaseApplicationImpl failed", e)
                     loader.loadClass("com.tencent.qqnt.watch.app.WatchApplicationDelegate")
                 }
