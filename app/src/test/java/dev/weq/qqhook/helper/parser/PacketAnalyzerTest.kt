@@ -29,14 +29,25 @@ class PacketAnalyzerTest {
     }
 
     @Test
-    fun `长度前缀被正确剥离`() {
-        // body: protobuf field1 = varint 150
+    fun `长度前缀按整包长度识别`() {
+        // QQ 帧头长度是整包长度（含 4 字节头本身）
         val body = byteArrayOf(0x08, 0x96.toByte(), 0x01)
-        val withPrefix = byteArrayOf(0, 0, 0, body.size.toByte()) + body
+        val total = body.size + 4
+        val withPrefix = byteArrayOf(
+            (total ushr 24).toByte(), (total ushr 16).toByte(),
+            (total ushr 8).toByte(), total.toByte(),
+        ) + body
         val a = PacketAnalyzer.analyze(withPrefix)
         assertEquals(4, a.prefixLen)
         assertEquals(body.size, a.bodySize)
         assertEquals(PacketAnalyzer.Kind.PROTOBUF, a.kind)
+    }
+
+    @Test
+    fun `长度前缀按剩余长度也能识别`() {
+        val body = byteArrayOf(0x08, 0x96.toByte(), 0x01)
+        val withPrefix = byteArrayOf(0, 0, 0, body.size.toByte()) + body
+        assertEquals(4, PacketAnalyzer.analyze(withPrefix).prefixLen)
     }
 
     @Test
