@@ -21,7 +21,7 @@ object FileInboxReader {
     private const val QQ_PKG = "com.tencent.mobileqq"
     private const val INBOX = "qqhook_inbox"
 
-    private val inboxPath = "/data/data/$QQ_PKG/files/$INBOX"
+    private val inboxPath = "/data/user/0/$QQ_PKG/files/$INBOX"
 
     /** root 是否可用（只探测一次）。 */
     @Volatile
