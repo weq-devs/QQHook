@@ -240,10 +240,16 @@ object MainHook {
                 val dedup = PacketDedupCache.shouldProcess(seq, "receive_$cmd", data)
                 XposedBridge.log("[TXHook-RECV]   dedup=$dedup")
                 if (dedup) {
-                    sendTo("receive") {
-                        put("cmd", cmd); put("buffer", data)
-                        put("uin", uin); put("seq", seq)
-                        put("msgCookie", EMPTY_BYTE_ARRAY); put("type", "unknown")
+                    XposedBridge.log("[TXHook-RECV]   准备调用 sendTo")
+                    try {
+                        sendTo("receive") {
+                            put("cmd", cmd); put("buffer", data)
+                            put("uin", uin); put("seq", seq)
+                            put("msgCookie", EMPTY_BYTE_ARRAY); put("type", "unknown")
+                        }
+                        XposedBridge.log("[TXHook-RECV]   sendTo 返回成功")
+                    } catch (t: Throwable) {
+                        XposedBridge.log("[TXHook-RECV]   sendTo 抛出: $t")
                     }
                 }
             }.onFailure {
