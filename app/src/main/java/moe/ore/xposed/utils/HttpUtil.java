@@ -31,6 +31,8 @@ public final class HttpUtil {
     public static ContentResolver contentResolver;
 
     public static void sendTo(Uri uri, ContentValues contentValues, int source) {
+        de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] >>> 进入 sendTo mode="
+            + contentValues.getAsString("mode"));
         try {
             String url = getApiUrl();
             String mode = contentValues.getAsString("mode");
@@ -77,7 +79,9 @@ public final class HttpUtil {
                 // 如果查询不到状态就不发了
             }
         } catch (IllegalArgumentException ignored) {
-
+            de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] IllegalArgumentException: " + ignored);
+        } catch (Throwable t) {
+            de.robv.android.xposed.XposedBridge.log("[TXHook-SEND] 其他异常: " + t);
         }
     }
 
