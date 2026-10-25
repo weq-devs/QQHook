@@ -89,8 +89,13 @@ object FileInboxReader {
     /** 以 root 执行命令，返回输出行。 */
     private fun execRoot(cmd: String): List<String> {
         return runCatching {
-            val proc = ProcessBuilder(suPath, "-c", cmd)
+            val proc = ProcessBuilder(listOf(suPath, "-c", cmd))
                 .redirectErrorStream(true)
+                .redirectInput(ProcessBuilder.Redirect.from(java.io.File("/dev/null")))
+                .apply {
+                    // su 需要正确的 PATH 才能找到 sh/ls 等
+                    environment()["PATH"] = "/sbin:/system/sbin:/system/bin:/system/xbin:/debug_ramdisk"
+                }
                 .start()
             val lines = BufferedReader(InputStreamReader(proc.inputStream)).use { r ->
                 r.lineSequence().toList()
