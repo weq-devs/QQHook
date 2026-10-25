@@ -231,11 +231,15 @@ object MainHook {
                 val from = it.args[0]
                 XposedBridge.log("[TXHook-RECV] ★回调触发 args=${it.args.size} cls=${from?.javaClass?.name}")
                 val cmd = from.getField<String>("mCmd")
+                XposedBridge.log("[TXHook-RECV]   cmd=$cmd")
                 val seq = from.getField<Int>("mSeq")
                 val uin = from.getField<String>("mUin")
                 val data = from.getField<ByteArray>("mRecvData")
+                XposedBridge.log("[TXHook-RECV]   seq=$seq uin=$uin size=${data?.size}")
 
-                if (PacketDedupCache.shouldProcess(seq, "receive_$cmd", data)) {
+                val dedup = PacketDedupCache.shouldProcess(seq, "receive_$cmd", data)
+                XposedBridge.log("[TXHook-RECV]   dedup=$dedup")
+                if (dedup) {
                     sendTo("receive") {
                         put("cmd", cmd); put("buffer", data)
                         put("uin", uin); put("seq", seq)
