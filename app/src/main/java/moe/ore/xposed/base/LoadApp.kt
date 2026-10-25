@@ -187,6 +187,19 @@ object LoadApp {
         )
 
         if (injectClassloader(moduleClassLoader)) {
+            // 诊断：进程判断在 Android 10+ 可能失效（runningAppProcesses 只返回自身）
+            val procNameDiag = runCatching { ProcUtil.procName }.getOrElse { "ERR:${it.message}" }
+            val isMsfDiag = runCatching { ProcUtil.isMsf }.getOrElse { false }
+            android.util.Log.i(
+                "TXHook-DIAG",
+                "[INIT] pid=${android.os.Process.myPid()} procName=$procNameDiag " +
+                    "isMsf=$isMsfDiag hostProcess=$hostProcessName",
+            )
+            XposedBridge.log(
+                "[TXHook-DIAG] pid=${android.os.Process.myPid()} procName=$procNameDiag " +
+                    "isMsf=$isMsfDiag hostProcess=$hostProcessName",
+            )
+
             AntiDetection() // 由于进程作用域不同，现在它不能放进isMsf的判断中
 
             if (ProcUtil.isMsf) {
