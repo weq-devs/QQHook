@@ -60,7 +60,7 @@ object FileInboxReader {
 
     private fun listInboxFiles(): List<String> {
         // -1 按时间排序，只取 .jsonl
-        val output = execRoot("ls -1t $inboxPath 2>/dev/null").joinToString("\n")
+        val output = execRoot("ls -1t $inboxPath").joinToString("\n")
         if (output.isBlank()) return emptyList()
         return output.lineSequence()
             .map { it.trim() }
