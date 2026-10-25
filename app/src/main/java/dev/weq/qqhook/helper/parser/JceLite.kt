@@ -48,18 +48,36 @@ object JceLite {
         while (pos < data.size) {
             if (++guard > MAX_ELEMENTS) { ok = false; break }
             val start = pos
-            val tag = data[pos].toInt() and 0xFF
-            pos++
-            if (pos >= data.size) { ok = false; break }
-            val type = data[pos].toInt() and 0xFF
-            pos++
-            val parsed = readValue(data, pos, type, tag, 0)
+            val head = readHead(data, pos) ?: run { ok = false; break }
+            pos = head.third
+            val parsed = readValue(data, pos, head.second, head.first, 0)
             if (parsed == null) { ok = false; break }
             pos = parsed.second
-            fields += Field(tag, parsed.first.typeName(), parsed.first, start, pos - start)
+            fields += Field(head.first, parsed.first.typeName(), parsed.first, start, pos - start)
         }
 
         return Result(fields, pos - offset, ok && fields.isNotEmpty())
+    }
+
+    /**
+     * 读一个字段头。
+     *
+     * Tars/JCE 把 type 和 tag 合并在一个字节里：`(type << 4) | tag`。
+     * 当 tag >= 15 时低 4 位为 0x0F，真正的 tag 紧跟其后。
+     *
+     * @return (tag, type) 与新的位置
+     */
+    private fun readHead(data: ByteArray, start: Int): Triple<Int, Int, Int>? {
+        if (start >= data.size) return null
+        val b = data[start].toInt() and 0xFF
+        val type = (b ushr 4) and 0x0F
+        val lowTag = b and 0x0F
+        return if (lowTag == 0x0F) {
+            if (start + 1 >= data.size) return null
+            Triple(data[start + 1].toInt() and 0xFF, type, start + 2)
+        } else {
+            Triple(lowTag, type, start + 1)
+        }
     }
 
     private fun Value.typeName(): String = when (this) {
@@ -80,7 +98,7 @@ object JceLite {
         tag: Int,
         depth: Int,
     ): Pair<Value, Int>? {
-        val type = rawType and 0x0F
+        val type = rawType
         var pos = start
 
         return when (type) {
@@ -195,13 +213,8 @@ object JceLite {
         expectTag: Int,
         depth: Int,
     ): Pair<Value, Int>? {
-        if (start + 2 > data.size) return null
-        var pos = start
-        val tag = data[pos].toInt() and 0xFF
-        pos++
-        val type = data[pos].toInt() and 0xFF
-        pos++
-        return readValue(data, pos, type, tag, depth)
+        val head = readHead(data, start) ?: return null
+        return readValue(data, head.third, head.second, head.first, depth)
     }
 
     /**

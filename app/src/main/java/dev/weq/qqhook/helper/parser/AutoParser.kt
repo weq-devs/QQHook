@@ -114,8 +114,21 @@ object AutoParser {
                     )
                 }
 
+                3 -> {
+                    // 已废弃的 group：QQ 的部分包仍在用。
+                    // 读到匹配的 end-group（wire type 4）为止，内部字段照常展开。
+                    val inner = mutableListOf<Field>()
+                    val end = readGroup(data, pos, fieldNumber, inner, 0)
+                    if (end == null) { ok = false; break }
+                    pos = end
+                    fields += Field(
+                        fieldNumber, 3, "group",
+                        Value.Message(inner), fieldStart, pos - fieldStart,
+                    )
+                }
+
                 else -> {
-                    // 3/4 是已废弃的 group，6/7 非法
+                    // 4 单独出现（没有对应 start）或 6/7 都是非法
                     ok = false
                     break
                 }
@@ -148,7 +161,7 @@ object AutoParser {
         }
 
         // 2. 文本
-        if (isText) return Value.Text(text!!)
+        if (isText) return Value.Text(text)
 
         // 3. 退回 hex
         return Value.Bytes(body.toHexString(), body.size)
@@ -177,6 +190,76 @@ object AutoParser {
     }
 
     // ---------------------------------------------------------------- 基础读取
+
+    /**
+     * 读取一个 group 的内容，直到遇到同编号的 end-group。
+     *
+     * @return 结束位置（end-group 之后）；解析失败返回 null
+     */
+    private fun readGroup(
+        data: ByteArray,
+        start: Int,
+        groupNumber: Int,
+        out: MutableList<Field>,
+        depth: Int,
+    ): Int? {
+        if (depth > MAX_DEPTH) return null
+        var pos = start
+        while (pos < data.size) {
+            val fieldStart = pos
+            val key = readVarint(data, pos) ?: return null
+            pos = key.second
+            val wireType = (key.first and 0x7).toInt()
+            val number = (key.first ushr 3).toInt()
+
+            if (wireType == 4) {
+                // end-group：编号必须匹配
+                return if (number == groupNumber) pos else null
+            }
+
+            when (wireType) {
+                0 -> {
+                    val v = readVarint(data, pos) ?: return null
+                    pos = v.second
+                    out += Field(number, 0, "varint", Value.Varint(v.first, zigzagDecode(v.first)),
+                        fieldStart, pos - fieldStart)
+                }
+                1 -> {
+                    if (pos + 8 > data.size) return null
+                    val slice = data.copyOfRange(pos, pos + 8)
+                    pos += 8
+                    out += Field(number, 1, "fixed64",
+                        Value.Fixed(slice.toHexString(), slice.readLongLe()), fieldStart, pos - fieldStart)
+                }
+                2 -> {
+                    val len = readVarint(data, pos) ?: return null
+                    pos = len.second
+                    if (len.first < 0 || len.first > Int.MAX_VALUE || pos + len.first > data.size) return null
+                    val body = data.copyOfRange(pos, pos + len.first.toInt())
+                    pos += len.first.toInt()
+                    val value = interpretDelimited(body, number, depth + 1)
+                    out += Field(number, 2, value.typeName(), value, fieldStart, pos - fieldStart)
+                }
+                3 -> {
+                    val inner = mutableListOf<Field>()
+                    val end = readGroup(data, pos, number, inner, depth + 1) ?: return null
+                    pos = end
+                    out += Field(number, 3, "group", Value.Message(inner), fieldStart, pos - fieldStart)
+                }
+                5 -> {
+                    if (pos + 4 > data.size) return null
+                    val slice = data.copyOfRange(pos, pos + 4)
+                    pos += 4
+                    out += Field(number, 5, "fixed32",
+                        Value.Fixed(slice.toHexString(), (slice.readIntLe().toLong() and 0xFFFFFFFFL)),
+                        fieldStart, pos - fieldStart)
+                }
+                else -> return null
+            }
+        }
+        // 没等到 end-group
+        return null
+    }
 
     /** 读 varint，返回 (值, 新位置)；越界或超过 10 字节返回 null。 */
     fun readVarint(data: ByteArray, start: Int): Pair<Long, Int>? {
