@@ -134,18 +134,21 @@ object AutoParser {
     private fun interpretDelimited(body: ByteArray, fieldNumber: Int, depth: Int): Value {
         if (body.isEmpty()) return Value.Text("")
 
-        // 1. 优先当嵌套 message 解
-        if (depth < MAX_DEPTH && body.size <= MAX_NESTED_BYTES && body.size >= 2) {
+        // 先判断这段字节本身是不是合法文本：合法文本优先当字符串，
+        // 否则 "abc" 这种会被误拆成 protobuf 字段。
+        val text = tryDecodeUtf8(body)
+        val isText = text != null && isMostlyPrintable(text)
+
+        // 1. 嵌套 message（文本优先，避免把普通字符串拆成 message）
+        if (!isText && depth < MAX_DEPTH && body.size <= MAX_NESTED_BYTES && body.size >= 2) {
             val nested = parse(body, 0)
-            // 要求完全消费、至少一个字段、且不是「整段当字符串」更合理的情况
             if (nested.valid && nested.consumed == body.size && looksLikeMessage(nested)) {
                 return Value.Message(nested.fields)
             }
         }
 
-        // 2. 试 UTF-8 文本
-        val text = tryDecodeUtf8(body)
-        if (text != null && isMostlyPrintable(text)) return Value.Text(text)
+        // 2. 文本
+        if (isText) return Value.Text(text!!)
 
         // 3. 退回 hex
         return Value.Bytes(body.toHexString(), body.size)
@@ -154,15 +157,14 @@ object AutoParser {
     /**
      * 嵌套结果看起来像 message 吗？
      *
-     * 纯 ASCII 字符串恰好也能被当成 protobuf 解出来的情况不少（比如 "abc" 会被
-     * 拆成字段），所以要求字段数 >= 1 且字段编号分布合理。
+     * 到这里时已经排除了「整段是合法文本」的情况，所以条件可以放宽：
+     * 只要有字段、字段编号合理即可。单 varint 字段也接受（很常见，
+     * 比如 `08 01`）。
      */
     private fun looksLikeMessage(r: Result): Boolean {
         if (r.fields.isEmpty()) return false
         // 字段编号通常不大；如果出现离谱的编号，多半是误判
         if (r.fields.any { it.number > 100_000 }) return false
-        // 全是 varint 且只有一个字段时，字符串误判概率高，交给文本判定
-        if (r.fields.size == 1 && r.fields[0].wireType == 0) return false
         return true
     }
 
