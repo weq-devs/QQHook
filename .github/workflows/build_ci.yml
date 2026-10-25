@@ -65,6 +65,8 @@ jobs:
           sed -i 's/org.gradle.configuration-cache=true//g' gradle.properties
           echo ${{ secrets.SIGN_KEYSTORE_BASE64 }} | base64 -d > keystore.jks
           chmod +x ./gradlew
+          # 先跑单元测试（纯逻辑：协议解析 / 收发合并），失败则不打包
+          ./gradlew :app:testDebugUnitTest
           ./gradlew :app:assembleRelease
           echo "APK_FILE=$(find app/build/outputs/apk/release -iname '*.apk' | head -n1)" >> $GITHUB_ENV
         env:
