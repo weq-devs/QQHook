@@ -31,6 +31,49 @@ jobs:
           submodules: 'true'
           fetch-depth: 0
 
+      - name: Resolve version
+        id: version
+        # 版本号以 tag 为准：推送 tag → 用 tag 名；手动触发 → 用输入的 tag，
+        # 没填就取最近一个 tag。build.gradle.kts 里的 versionName 前缀是硬编码的，
+        # 下一步会按这里的结果覆盖。
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            VERSION="$INPUT_TAG"
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
+          fi
+          echo "APP_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "构建版本：${VERSION}"
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+
+      - name: Apply version to build script
+        # 只改 versionName 的版本前缀，保留「-<提交数>-<短hash>」后缀，
+        # 这样调试时仍能从版本名看出对应哪次提交。
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re, sys
+
+          version = os.environ["APP_VERSION"].strip()
+          if not version:
+              sys.exit("APP_VERSION 为空")
+
+          path = pathlib.Path("build.gradle.kts")
+          src = path.read_text(encoding="utf-8")
+          new, count = re.subn(
+              r'versionName = "v[^"]*\$count-\$hash"',
+              f'versionName = "{version}-$count-$hash"',
+              src,
+          )
+          if count != 1:
+              sys.exit(f"versionName 替换失败（匹配 {count} 处），请检查 build.gradle.kts")
+          path.write_text(new, encoding="utf-8")
+          print(f"versionName -> {version}-$count-$hash")
+          PY
+          grep -n 'versionName =' build.gradle.kts
+
       - name: Cache Gradle
         uses: actions/cache@v5
         with:

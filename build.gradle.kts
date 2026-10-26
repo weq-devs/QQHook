@@ -66,7 +66,9 @@ val gitInfoProvider: Provider<GitInfo> =
             GitInfo(
                 commitCount = count,
                 shortHash = hash,
-                versionName = "v3.3.0-$count-$hash"
+                // CI 会按 tag 覆盖这里的前缀（见 .github/workflows/build_ci.yml）；
+                // 本地构建沿用最近一次发布的版本号。
+                versionName = "v4.0.2-$count-$hash"
             )
         }
 
