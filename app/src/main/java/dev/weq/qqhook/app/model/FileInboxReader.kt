@@ -85,10 +85,17 @@ object FileInboxReader {
             .toList()
     }
 
-    /** 读取并立即删除，保证不重复消费。 */
+    /**
+     * 读取并删除，保证不重复消费。
+     *
+     * 读和删分成两步：先 `cat` 拿到内容，确认读到东西后再 `rm`。
+     * 合成一条 `cat; rm` 的话，只要读流那一侧出任何问题（进程被杀、
+     * su 超时、行读取中断），文件已经删掉但数据没拿到，包就永久丢了。
+     */
     private fun readAndRemove(path: String): String? {
-        val lines = execInQqNamespace("cat $path; rm -f $path")
+        val lines = execInQqNamespace("cat $path")
         if (lines.isEmpty()) return null
+        execInQqNamespace("rm -f $path")
         return lines.joinToString("\n")
     }
 

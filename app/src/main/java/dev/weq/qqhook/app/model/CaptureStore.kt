@@ -55,10 +55,35 @@ object CaptureStore {
     /** 扫描所有历史会话，按开始时间倒序。 */
     fun listSessions(): List<SessionMeta> {
         val d = dir() ?: return emptyList()
+        recoverOrphanFiles(d)
         return d.listFiles { f -> f.isFile && f.name.endsWith(".json") }
             ?.mapNotNull { parseMeta(it) }
             ?.sortedByDescending { it.startedAt }
             ?: emptyList()
+    }
+
+    /**
+     * 修复旧版本留下的 `.json.new` 残留。
+     *
+     * 旧实现只调 `startWrite()` 就 close，没走 `finishWrite()`，
+     * 数据全留在 `.json.new` 里。这里把「有 .new、没有 .json」的补回正式文件；
+     * 内容不完整（解析不了）的就删掉。
+     */
+    private fun recoverOrphanFiles(d: File) {
+        d.listFiles { f -> f.isFile && f.name.endsWith(".json.new") }?.forEach { tmp ->
+            val target = File(d, tmp.name.removeSuffix(".new"))
+            if (target.exists()) {
+                tmp.delete()
+                return@forEach
+            }
+            val ok = runCatching { JSONObject(tmp.readText()).optJSONArray("packets") != null }
+                .getOrDefault(false)
+            if (ok) {
+                if (!tmp.renameTo(target)) Log.w(TAG, "恢复残留失败: ${tmp.name}")
+            } else {
+                tmp.delete()
+            }
+        }
     }
 
     private fun parseMeta(file: File): SessionMeta? = runCatching {
@@ -94,10 +119,7 @@ object CaptureStore {
             put("packets", JSONArray().apply { packets.forEach { put(it.toJson()) } })
         }
         runCatching {
-            AtomicFile(file).startWrite().use { out ->
-                out.write(root.toString().toByteArray(Charsets.UTF_8))
-                (out as? java.io.FileOutputStream)?.fd?.sync()
-            }
+            writeAtomic(file, root.toString().toByteArray(Charsets.UTF_8))
         }.onFailure { Log.w(TAG, "保存会话失败: ${file.name}", it) }
     }
 
@@ -142,9 +164,7 @@ object CaptureStore {
             runCatching {
                 val root = JSONObject(file.readText())
                 root.put("readSeqs", JSONArray().apply { seqs.forEach { put(it) } })
-                AtomicFile(file).startWrite().use { out ->
-                    out.write(root.toString().toByteArray(Charsets.UTF_8))
-                }
+                writeAtomic(file, root.toString().toByteArray(Charsets.UTF_8))
             }.onFailure { Log.w(TAG, "更新已读状态失败: $id", it) }
         }
     }
@@ -158,6 +178,26 @@ object CaptureStore {
     fun clearAll() {
         io.execute {
             dir()?.listFiles()?.forEach { it.delete() }
+        }
+    }
+
+    /**
+     * 原子写文件。
+     *
+     * `AtomicFile` 是「写 `.new` 临时文件 → finishWrite 时 rename」的两段式，
+     * 必须显式 finishWrite，否则 close 只关流、正式文件根本不会出现。
+     * 写入过程中抛异常时调用 failWrite 清掉临时文件。
+     */
+    private fun writeAtomic(file: File, bytes: ByteArray) {
+        val atomic = AtomicFile(file)
+        val out = atomic.startWrite()
+        try {
+            out.write(bytes)
+            out.fd.sync()
+            atomic.finishWrite(out)
+        } catch (t: Throwable) {
+            atomic.failWrite(out)
+            throw t
         }
     }
 

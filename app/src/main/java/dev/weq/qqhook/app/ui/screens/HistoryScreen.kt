@@ -61,8 +61,18 @@ fun HistoryScreen(
     var refresh by remember { mutableIntStateOf(0) }
     var confirmClear by remember { mutableStateOf(false) }
 
+    // 停止抓包是异步落盘的（CaptureStore 单线程队列），进历史页时文件可能还没写完，
+    // 所以轮询一段时间直到列表稳定，避免刚暂停就进历史看到空列表。
+    // 用空列表当哨兵：第一次结果若是空列表，不能当作「已稳定」提前退出。
     LaunchedEffect(refresh) {
-        sessions = CaptureStore.listSessions()
+        var last: List<CaptureStore.SessionMeta>? = null
+        for (attempt in 0 until 8) {
+            val now = CaptureStore.listSessions()
+            sessions = now
+            if (last != null && now.size == last.size && now.isNotEmpty()) return@LaunchedEffect
+            last = now
+            kotlinx.coroutines.delay(250)
+        }
     }
 
     Scaffold(

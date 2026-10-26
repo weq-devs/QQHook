@@ -28,8 +28,8 @@ public final class FileBridge {
     private static final String TAG = "TXHook-FILE";
     /** 相对 QQ 私有 files 目录。 */
     private static final String INBOX_DIR = "qqhook_inbox";
-    /** 单文件最大条数，超过就滚动到下一个文件。 */
-    private static final int MAX_RECORDS_PER_FILE = 512;
+    /** 缓冲区最多攒多少条，超过就立刻刷盘。 */
+    private static final int MAX_BUFFERED_RECORDS = 512;
     /** 缓冲刷新间隔。 */
     private static final long FLUSH_INTERVAL_MS = 200L;
 
@@ -39,6 +39,7 @@ public final class FileBridge {
     private static int fileSeq = 0;
     private static long lastFlush = 0L;
     private static File inboxDir = null;
+    private static Thread flusher = null;
 
     private FileBridge() {
     }
@@ -57,7 +58,32 @@ public final class FileBridge {
             }
             inboxDir = dir;
             de.robv.android.xposed.XposedBridge.log(TAG + " 投递目录: " + dir);
+            startFlusher();
         }
+    }
+
+    /**
+     * 定时刷盘。
+     *
+     * append() 只在「下一条记录到来时」检查是否该刷，所以暂停抓包后
+     * 缓冲区里最后那批记录永远等不到下一次 append —— 必须有个后台线程兜底。
+     */
+    private static void startFlusher() {
+        if (flusher != null) return;
+        flusher = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(FLUSH_INTERVAL_MS);
+                    flush();
+                } catch (InterruptedException e) {
+                    return;
+                } catch (Throwable t) {
+                    de.robv.android.xposed.XposedBridge.log(TAG + " 刷盘异常: " + t);
+                }
+            }
+        }, "txhook-filebridge-flush");
+        flusher.setDaemon(true);
+        flusher.start();
     }
 
     public static boolean isReady() {
@@ -79,7 +105,7 @@ public final class FileBridge {
             BUFFER.append(line).append('\n');
             bufferedCount++;
             long now = System.currentTimeMillis();
-            needFlush = bufferedCount >= MAX_RECORDS_PER_FILE
+            needFlush = bufferedCount >= MAX_BUFFERED_RECORDS
                     || (bufferedCount > 0 && now - lastFlush >= FLUSH_INTERVAL_MS);
         }
         if (needFlush) flush();

@@ -81,20 +81,34 @@ object CaptureRepository {
     private fun startInboxPolling() {
         if (pollThread != null) return
         pollThread = Thread {
-            if (!FileInboxReader.probeRoot()) {
-                android.util.Log.w("CaptureRepository", "无 root，文件通道不可用")
-                return@Thread
+            // 首次启动时 root 授权弹窗可能还没点，不能探测失败就永久退出，
+            // 否则后面授权了也永远收不到数据。失败就隔一会儿再试（最多 5 分钟，
+            // 避免完全没 root 的设备一直反复弹授权框）。
+            var retries = 0
+            while (!FileInboxReader.probeRoot()) {
+                if (++retries > 30) {
+                    android.util.Log.w("CaptureRepository", "root 始终不可用，文件通道放弃")
+                    return@Thread
+                }
+                android.util.Log.w("CaptureRepository", "root 不可用，10s 后重试（$retries/30）")
+                try {
+                    Thread.sleep(10_000)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
             }
             while (true) {
                 try {
-                    // 抓包开关关闭时也要读：否则开关打开前产生的数据会一直堆着，
-                    // 而且用户可能刚启动 App 就想看已有数据。
-                    if (!isBrowsingHistory) {
-                        val drained = FileInboxReader.drain()
-                        if (drained.isNotEmpty()) {
+                    // 暂停 / 浏览历史时也要 drain，但把读到的包丢掉：
+                    // hook 端不知道 App 的开关状态，会一直往 QQ 目录里写；
+                    // 不读走的话文件会无限堆积，重新开始时旧数据又会一股脑涌进来。
+                    val drained = FileInboxReader.drain()
+                    if (drained.isNotEmpty()) {
+                        val accept = isCatchEnabled && !isBrowsingHistory
+                        if (accept) {
                             android.util.Log.i("CaptureRepository", "读到 ${drained.size} 条")
                             uiHandler.post {
-                                if (!isBrowsingHistory) {
+                                if (isCatchEnabled && !isBrowsingHistory) {
                                     for (p in drained) {
                                         p.uid = nextItemId()
                                         packets.add(p)
@@ -102,6 +116,11 @@ object CaptureRepository {
                                     packetGeneration++
                                 }
                             }
+                        } else {
+                            android.util.Log.d(
+                                "CaptureRepository",
+                                "丢弃 ${drained.size} 条（暂停或浏览历史中）",
+                            )
                         }
                     }
                     Thread.sleep(POLL_INTERVAL_MS)
@@ -120,19 +139,27 @@ object CaptureRepository {
     }
 
     fun updateCatchEnabled(enabled: Boolean) {
-        if (enabled && !isCatchEnabled) {
-            // 开始新一轮抓包：退出历史浏览、清掉上一轮残留、开新会话
-            isBrowsingHistory = false
-            packets.clear()
-            readSeqs.clear()
-            packetGeneration++
-            sessionStartedAt = System.currentTimeMillis()
-        }
-        isCatchEnabled = enabled
-        Consist.isCatch = enabled
-        if (!enabled) {
+        val wasEnabled = isCatchEnabled
+        val wasBrowsing = isBrowsingHistory
+
+        if (enabled) {
+            // 开始新一轮抓包：无论之前是暂停还是正在浏览历史，
+            // 都要退出历史视图、清掉上一轮残留、开一个新会话。
+            // （旧实现只在 !isCatchEnabled 时做，导致从历史点「回到抓包」什么都不发生）
+            if (!wasEnabled || wasBrowsing) {
+                isBrowsingHistory = false
+                packets.clear()
+                readSeqs.clear()
+                packetGeneration++
+                sessionStartedAt = System.currentTimeMillis()
+            }
+        } else if (wasEnabled) {
+            // 先落盘再关开关，否则 flushSession 看到 isBrowsingHistory 等状态会误判
             flushSession()
         }
+
+        isCatchEnabled = enabled
+        Consist.isCatch = enabled
     }
 
     /** 把当前会话写到历史。停止抓包 / 切到历史 / 退出时调用。 */
@@ -201,6 +228,8 @@ object CaptureRepository {
     /** 载入历史会话到当前列表（只读浏览模式）。 */
     fun loadSession(id: Long): Boolean {
         val loaded = CaptureStore.loadSession(id) ?: return false
+        // 切走之前先把正在抓的这一轮落盘，否则下面 clear 会把它整个丢掉
+        flushSession()
         packets.clear()
         packets.addAll(loaded)
         readSeqs.clear()
