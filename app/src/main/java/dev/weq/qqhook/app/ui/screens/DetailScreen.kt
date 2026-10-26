@@ -1,8 +1,7 @@
 package dev.weq.qqhook.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,19 +11,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.ExpandLess
-import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.DataObject
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,12 +47,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.weq.qqhook.app.model.CapturePacket
+import dev.weq.qqhook.app.ui.components.MAX_TREE_ROWS
+import dev.weq.qqhook.app.ui.components.TreeRow
+import dev.weq.qqhook.app.ui.components.TreeRowView
+import dev.weq.qqhook.app.ui.components.buildTreeRows
 import dev.weq.qqhook.app.ui.components.formatSize
+import dev.weq.qqhook.app.ui.components.toHexLines
 import dev.weq.qqhook.app.ui.theme.LocalCaptureColors
 import dev.weq.qqhook.app.ui.theme.MonoStyle
 import dev.weq.qqhook.app.util.ExportHelper
-import dev.weq.qqhook.helper.parser.AutoParser
-import dev.weq.qqhook.helper.parser.JceLite
+import dev.weq.qqhook.app.util.PacketJson
 import dev.weq.qqhook.helper.parser.PacketAnalyzer
 
 /**
@@ -82,6 +82,12 @@ fun DetailScreen(
 
     val analysis = remember(current) {
         current?.let { PacketAnalyzer.analyze(it.buffer) }
+    }
+
+    // 折叠状态以路径为 key；换包时重置。默认全展开。
+    var collapsed by remember(current) { mutableStateOf<Set<String>>(emptySet()) }
+    val rows = remember(analysis, collapsed) {
+        analysis?.nodes?.let { buildTreeRows(it, collapsed) }.orEmpty()
     }
 
     Scaffold(
@@ -110,16 +116,16 @@ fun DetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        val text = current?.let { CaptureStoreText.single(it) }.orEmpty()
+                        val text = current?.let { PacketJson.encode(it, analysis) }.orEmpty()
                         ExportHelper.copyToClipboard(context, text, cmd)
                     }) {
-                        Icon(Icons.Rounded.ContentCopy, contentDescription = "复制")
+                        Icon(Icons.Rounded.ContentCopy, contentDescription = "复制 JSON")
                     }
                     IconButton(onClick = {
-                        val text = current?.let { CaptureStoreText.single(it) }.orEmpty()
+                        val text = current?.let { PacketJson.encode(it, analysis) }.orEmpty()
                         ExportHelper.shareText(context, text, cmd)
                     }) {
-                        Icon(Icons.Rounded.Share, contentDescription = "分享")
+                        Icon(Icons.Rounded.Share, contentDescription = "分享 JSON")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -197,17 +203,44 @@ fun DetailScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                if (mode == 0 && analysis != null) {
+            if (mode == 0 && analysis != null) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(c.codeBackground, RoundedCornerShape(10.dp)),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+                ) {
                     when {
-                        analysis.protobuf != null && analysis.kind == PacketAnalyzer.Kind.PROTOBUF ->
-                            protobufFields(analysis.protobuf.fields)
-
-                        analysis.jce != null && analysis.kind == PacketAnalyzer.Kind.JCE ->
-                            jceFields(analysis.jce.fields)
+                        analysis.nodes != null -> {
+                            item(key = "json-header") {
+                                JsonHeader(
+                                    fieldCount = rows.count { it is TreeRow.Field },
+                                    bodySize = analysis.bodySize,
+                                    onCopy = {
+                                        ExportHelper.copyToClipboard(
+                                            context,
+                                            PacketJson.encode(current, analysis),
+                                            cmd,
+                                        )
+                                    },
+                                )
+                            }
+                            items(rows, key = { it.path }) { row ->
+                                TreeRowView(row) { path ->
+                                    collapsed = if (path in collapsed) collapsed - path
+                                    else collapsed + path
+                                }
+                            }
+                            if (rows.size >= MAX_TREE_ROWS) item(key = "json-truncated") {
+                                Text(
+                                    "内容过大，已截断显示；完整内容请复制 JSON",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(12.dp),
+                                )
+                            }
+                        }
 
                         // TRPC 信封：只展示服务名，剩余二进制体提示看 HEX
                         analysis.kind == PacketAnalyzer.Kind.TRPC -> item {
@@ -218,15 +251,20 @@ fun DetailScreen(
                                 color = c.onCodeBackground,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(c.codeBackground, RoundedCornerShape(10.dp))
                                     .padding(12.dp),
                             )
                         }
 
-                        analysis.text != null ->
-                            item {
-                                TextCard(analysis.text, c.codeBackground, c.onCodeBackground)
-                            }
+                        analysis.text != null -> item {
+                            Text(
+                                analysis.text,
+                                style = MonoStyle.copy(fontSize = 12.sp),
+                                color = c.onCodeBackground,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                            )
+                        }
 
                         else -> item {
                             Text(
@@ -237,11 +275,9 @@ fun DetailScreen(
                             )
                         }
                     }
-                } else {
-                    item {
-                        HexCard(current.buffer)
-                    }
                 }
+            } else {
+                HexList(current.buffer)
             }
         }
     }
@@ -285,245 +321,63 @@ private fun ProtocolBanner(kind: String, confidence: Double, prefixLen: Int, bod
     }
 }
 
-// ---------------------------------------------------------------- 结构化渲染
 
-private fun androidx.compose.foundation.lazy.LazyListScope.protobufFields(fields: List<AutoParser.Field>) {
-    fields.forEach { f ->
-        item(key = "pb-${f.offset}") {
-            FieldRow(
-                tag = f.number.toString(),
-                type = f.typeName,
-                value = f.value,
-                offset = f.offset,
-                length = f.length,
-            )
-        }
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.jceFields(fields: List<JceLite.Field>) {
-    fields.forEach { f ->
-        item(key = "jce-${f.offset}") {
-            FieldRow(
-                tag = f.tag.toString(),
-                type = f.typeName,
-                value = f.value,
-                offset = f.offset,
-                length = f.length,
+/** 结构视图头部：字段数 / 体积 + 复制 JSON。 */
+@Composable
+private fun JsonHeader(fieldCount: Int, bodySize: Int, onCopy: () -> Unit) {
+    val c = LocalCaptureColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "$fieldCount 个字段 · 体 $bodySize B",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.weight(1f))
+        IconButton(onClick = onCopy) {
+            Icon(
+                Icons.Rounded.DataObject,
+                contentDescription = "复制 JSON",
+                tint = c.proto,
             )
         }
     }
 }
 
 /**
- * 一个字段：左边 tag + 类型，右边值。嵌套结构可点开递归展开。
+ * HEX 视图。
+ *
+ * 每行一个独立 `Text`，整列共享同一个横向 `ScrollState` —— 之前整段塞进一个
+ * `Text`，窄屏会自动折行，把 16 字节一行的对齐彻底打乱。
+ * 用 `items()` 而不是单个 item，保证大包也能按需组合。
  */
 @Composable
-private fun FieldRow(
-    tag: String,
-    type: String,
-    value: Any,
-    offset: Int,
-    length: Int,
-) {
+private fun HexList(buffer: ByteArray) {
     val c = LocalCaptureColors.current
-    var expanded by remember { mutableStateOf(false) }
+    val lines = remember(buffer) { buffer.toHexLines() }
+    val scroll = rememberScrollState()
 
-    val nested = when (value) {
-        is AutoParser.Value.Message -> value.fields
-        is JceLite.Value.Struct -> value.fields
-        else -> null
-    }
-
-    Column(
+    LazyColumn(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
-            .clickable(enabled = nested != null) { expanded = !expanded }
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            .fillMaxSize()
+            .background(c.codeBackground, RoundedCornerShape(10.dp)),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        items(lines, key = { it.offset }) { line ->
             Text(
-                tag,
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.width(34.dp),
+                text = line.text,
+                style = MonoStyle,
+                color = c.onCodeBackground,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier
+                    .horizontalScroll(scroll)
+                    .padding(horizontal = 12.dp),
             )
-            Text(
-                type,
-                style = MaterialTheme.typography.labelSmall,
-                color = typeColor(type, c),
-                modifier = Modifier.width(72.dp),
-            )
-
-            when (value) {
-                is AutoParser.Value.Message, is JceLite.Value.Struct -> {
-                    Text(
-                        "{ ${nested?.size ?: 0} 字段 }",
-                        style = MonoStyle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                is AutoParser.Value.Text -> Text(
-                    value.text.ellipsize(),
-                    style = MonoStyle,
-                    color = c.text,
-                )
-
-                is JceLite.Value.Text -> Text(
-                    value.text.ellipsize(),
-                    style = MonoStyle,
-                    color = c.text,
-                )
-
-                is AutoParser.Value.Varint -> Column {
-                    Text("${value.value}", style = MonoStyle)
-                    if (value.zigzag != value.value) {
-                        Text(
-                            "zigzag ${value.zigzag}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                is AutoParser.Value.Fixed -> Text(value.hex, style = MonoStyle)
-                is AutoParser.Value.Bytes -> Text(
-                    "${value.size} B ${value.hex.take(48)}${if (value.hex.length > 48) "…" else ""}",
-                    style = MonoStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                is JceLite.Value.Num -> Text("${value.value}", style = MonoStyle)
-                is JceLite.Value.Real -> Text("${value.value}", style = MonoStyle)
-                is JceLite.Value.Bytes -> Text(
-                    "${value.size} B ${value.hex.take(48)}",
-                    style = MonoStyle,
-                )
-
-                is JceLite.Value.ListValue -> Text(
-                    "[${value.items.size}] ${value.elementType}",
-                    style = MonoStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                is JceLite.Value.MapValue -> Text(
-                    "{${value.entries.size} 项}",
-                    style = MonoStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                else -> Text(value.toString(), style = MonoStyle)
-            }
-
-            if (nested != null) {
-                Spacer(Modifier.weight(1f))
-                Icon(
-                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
-
-        if (nested != null) {
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(start = 14.dp, top = 6.dp)) {
-                    when (val n = value) {
-                        is AutoParser.Value.Message -> n.fields.forEach {
-                            FieldRow(it.number.toString(), it.typeName, it.value, it.offset, it.length)
-                        }
-
-                        is JceLite.Value.Struct -> n.fields.forEach {
-                            FieldRow(it.tag.toString(), it.typeName, it.value, it.offset, it.length)
-                        }
-
-                        else -> {}
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun typeColor(type: String, c: dev.weq.qqhook.app.ui.theme.CaptureColors) = when (type) {
-    "string" -> c.text
-    "message", "struct" -> c.proto
-    "bytes" -> c.jce
-    else -> c.readContent
-}
-
-private fun String.ellipsize(max: Int = 120): String =
-    if (length <= max) this else take(max) + "…"
-
-@Composable
-private fun TextCard(text: String, bg: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color) {
-    Text(
-        text = text,
-        style = MonoStyle.copy(fontSize = 12.sp),
-        color = fg,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(bg, RoundedCornerShape(10.dp))
-            .padding(12.dp),
-    )
-}
-
-@Composable
-private fun HexCard(buffer: ByteArray) {
-    val c = LocalCaptureColors.current
-    val hex = remember(buffer) { buffer.toHexDump() }
-    Text(
-        text = hex,
-        style = MonoStyle,
-        color = c.onCodeBackground,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(c.codeBackground, RoundedCornerShape(10.dp))
-            .padding(12.dp),
-    )
-}
-
-/** 16 字节一行的 hex dump，带 offset 和 ASCII。 */
-private fun ByteArray.toHexDump(): String {
-    val sb = StringBuilder()
-    var i = 0
-    while (i < size) {
-        sb.append("%08X  ".format(i))
-        val end = minOf(i + 16, size)
-        for (j in i until end) {
-            sb.append("%02X ".format(this[j]))
-            if (j == i + 7) sb.append(' ')
-        }
-        for (j in end until i + 16) {
-            sb.append("   ")
-            if (j == i + 7) sb.append(' ')
-        }
-        sb.append(" |")
-        for (j in i until end) {
-            val b = this[j].toInt() and 0xFF
-            sb.append(if (b in 0x20..0x7E) b.toChar() else '.')
-        }
-        sb.append("|\n")
-        i += 16
-    }
-    return sb.toString()
-}
-
-/** 单条包的可分享文本。 */
-private object CaptureStoreText {
-    fun single(p: CapturePacket): String = buildString {
-        appendLine(if (p.from) "RECV" else "SEND")
-        appendLine("cmd: ${p.cmd}")
-        appendLine("seq: ${p.seq}")
-        appendLine("uin: ${p.uin}")
-        appendLine("time: ${p.time}")
-        appendLine("size: ${p.buffer.size} B")
-        appendLine()
-        append(p.buffer.joinToString("") { "%02x".format(it) })
     }
 }

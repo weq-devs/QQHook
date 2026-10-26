@@ -5,8 +5,6 @@
     <string name="catching_info">抓包详情</string>
     <string name="base_info">基础信息</string>
     <string name="info">信息</string>
-    <string name="jsonViewer_icon_plus">展开</string>
-    <string name="jsonViewer_icon_minus">收起</string>
     <string name="analyse_jce_protobuf">JCE / Protobuf 解析</string>
     <string name="clear_all">清空</string>
     <string name="back">返回</string>
