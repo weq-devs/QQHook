@@ -152,7 +152,7 @@ class PacketAnalyzerTest {
         val trpc = (
             byteArrayOf(0x7f, 0x02, 0x00, 0x11) +
                 "trpc.qqprofile.ConfigServantObj".toByteArray() +
-                byteArrayOf(0x00, 0xff, 0x7e, 0x81, 0x00, 0x9c)
+                byteArrayOf(0x00, 0xff.toByte(), 0x7e, 0x81.toByte(), 0x00, 0x9c.toByte())
             )
         assertEquals(PacketAnalyzer.Kind.TRPC, PacketAnalyzer.analyze(trpc).kind)
     }
