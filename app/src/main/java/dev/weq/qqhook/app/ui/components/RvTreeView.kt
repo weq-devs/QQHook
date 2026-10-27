@@ -1,12 +1,15 @@
 package dev.weq.qqhook.app.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -298,6 +301,7 @@ fun TreeRowView(
 ) {
     val c = LocalCaptureColors.current
     val open = row as? TreeRow.Open
+    val hScroll = rememberScrollState()
 
     Row(
         modifier = Modifier
@@ -319,12 +323,19 @@ fun TreeRowView(
             Spacer(Modifier.width(16.dp))
         }
 
-        Text(
-            text = row.toAnnotated(c),
-            style = MonoStyle,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // 长字段（URL / token / 长 hex）以前被 Ellipsis 截断且无法选中：
+        // 这里改成「单行 + 横向滚动」并能长按选中复制。
+        // weight 限制在剩余宽度内，横向滚动只发生在这一行，不影响折叠图标列。
+        SelectionContainer(modifier = Modifier.weight(1f)) {
+            Text(
+                text = row.toAnnotated(c),
+                style = MonoStyle,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier.horizontalScroll(hScroll),
+            )
+        }
     }
 }
 

@@ -51,19 +51,22 @@ object PacketAnalyzer {
             return Analysis(Kind.TEXT, 0, buffer.size, null, asText, 0.9)
         }
 
-        // 1.5 TRPC 信封：含大段可打印服务名/方法名，不是 protobuf 也不是 JCE。
-        val trpcName = detectTrpcServiceName(buffer)
-        if (trpcName != null) {
-            return Analysis(Kind.TRPC, 0, buffer.size, null, trpcName, 0.9)
-        }
-
-        // 2. 先按不剥前缀的常规路径解析
-        decodeDirect(buffer)?.let { return it }
-
-        // 3. 失败后再自动识别长度前缀重试（宽度 / 字节序由数据自证）
+        // 2. 先自动识别长度前缀（宽度 / 字节序由数据自证），剥掉能解就用剥后的结果。
+        //    这一条必须排在 TRPC 判定之前：JCE 正文里出现 "…ServantObj" 这类服务名
+        //    非常常见（SummaryCardServantObj / MCardSvc），只凭明文字样判定 TRPC 会把
+        //    正常的 JCE 包全部截胡。
         for (prefix in detectLengthPrefixes(buffer)) {
             val decoded = decodeDirect(prefix.body, prefix.width) ?: continue
             return decoded
+        }
+
+        // 3. 再按不剥前缀的常规路径解析
+        decodeDirect(buffer)?.let { return it }
+
+        // 4. 结构化解析都失败，才把「带明文服务名」的包当作 TRPC 信封。
+        val trpcName = detectTrpcServiceName(buffer)
+        if (trpcName != null) {
+            return Analysis(Kind.TRPC, 0, buffer.size, null, trpcName, 0.9)
         }
 
         return Analysis(Kind.HEX, 0, buffer.size, null, null, 0.2)

@@ -107,8 +107,9 @@ class PacketAnalyzerTest {
     }
 
     @Test
-    fun `直连能解析时不剥前缀`() {
-        // 这段 body 本身就能完整解析，即使外面套了长度前缀也走直连路径
+    fun `长度前缀被优先剥离（前缀字节本身也能当字段解析时）`() {
+        // 这段 body 和「前缀 + body」都能完整解析成 JCE：前缀的 4 个字节会被当成
+        // tag0/BYTE 0 之类的假字段吃进去。必须优先采用剥掉前缀的结果。
         val body = RvFixtures.hex("22 00 00 00 2a 16 02 68 69 0b")
         val total = body.size + 4
         val withPrefix = byteArrayOf(
@@ -117,7 +118,43 @@ class PacketAnalyzerTest {
         ) + body
         val a = PacketAnalyzer.analyze(withPrefix)
         assertEquals(PacketAnalyzer.Kind.JCE, a.kind)
-        assertEquals(0, a.prefixLen)
+        assertEquals(4, a.prefixLen)
+    }
+
+    // SummaryCard 这类 SSO 命令的 JCE 正文里带 "SummaryCardServantObj"，
+    // 曾被 TRPC 信封判定（只要看到 Servant/Obj 就认定是 trpc）抢先截胡。
+    // 真实抓包形如 `00 00 10 75 | 10 02 2c 3c 4c 56 15 SummaryCardServantObj 66 0e ReqSummaryCard …`。
+    // fixture 只保留决定判定的那几个字段（tag1 BYTE / tag5、tag6 STRING1），不含真实 uin。
+    private fun summaryCardSend(): ByteArray {
+        // tag1=BYTE(2)、tag5=STRING1("SummaryCardServantObj")、tag6=STRING1("ReqSummaryCard")
+        val body = RvFixtures.hex("10 02 56 15") +
+            "SummaryCardServantObj".toByteArray() +
+            RvFixtures.hex("66 0e") +
+            "ReqSummaryCard".toByteArray()
+        val total = body.size + 4
+        return byteArrayOf(
+            (total ushr 24).toByte(), (total ushr 16).toByte(),
+            (total ushr 8).toByte(), total.toByte(),
+        ) + body
+    }
+
+    @Test
+    fun `带 ServantObj 字样的 JCE 包不被误判为 TRPC`() {
+        val a = PacketAnalyzer.analyze(summaryCardSend())
+        assertEquals(PacketAnalyzer.Kind.JCE, a.kind)
+        assertNotNull(a.nodes)
+        assertEquals(4, a.prefixLen)
+    }
+
+    @Test
+    fun `确实是 trpc 信封时仍判定为 TRPC`() {
+        // 没有可解析的结构、只有明文服务名时才走 TRPC
+        val trpc = (
+            byteArrayOf(0x7f, 0x02, 0x00, 0x11) +
+                "trpc.qqprofile.ConfigServantObj".toByteArray() +
+                byteArrayOf(0x00, 0xff, 0x7e, 0x81, 0x00, 0x9c)
+            )
+        assertEquals(PacketAnalyzer.Kind.TRPC, PacketAnalyzer.analyze(trpc).kind)
     }
 
     @Test
